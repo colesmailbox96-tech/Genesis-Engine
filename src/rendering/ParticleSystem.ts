@@ -35,8 +35,8 @@ export class ParticleSystem {
     let i = 0;
     while (i < this.particles.length) {
       const p = this.particles[i];
-      p.position = p.position.add(p.velocity);
-      p.velocity = p.velocity.mul(0.98);
+      p.position.addMut(p.velocity);
+      p.velocity.mulMut(0.98);
       p.life--;
       p.alpha = Math.max(0, p.life / p.maxLife);
       if (p.life <= 0) {

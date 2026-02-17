@@ -240,14 +240,14 @@ export class Simulation {
     for (const mol of this.molecules) {
       mol.tick();
 
-      // Apply environment flow
+      // Apply environment flow (in-place to reduce allocations)
       const zone = this.environmentMap.getZoneAt(mol.position.x, mol.position.y);
-      mol.velocity = mol.velocity.add(zone.flowDirection.mul(zone.flowSpeed * 0.1));
-      mol.velocity = mol.velocity.mul(0.99); // friction
+      mol.velocity.x += zone.flowDirection.x * zone.flowSpeed * 0.1;
+      mol.velocity.y += zone.flowDirection.y * zone.flowSpeed * 0.1;
+      mol.velocity.mulMut(0.99); // friction
 
       // Wrap position
-      mol.position.x = ((mol.position.x % this.config.worldSize) + this.config.worldSize) % this.config.worldSize;
-      mol.position.y = ((mol.position.y % this.config.worldSize) + this.config.worldSize) % this.config.worldSize;
+      mol.position.wrapMut(this.config.worldSize);
 
       // Energy from nearby sources
       for (const source of this.energySources) {
@@ -292,6 +292,7 @@ export class Simulation {
       if (this.rng.next() < decayProb && mol.atoms.length > 2) {
         if (mol.bonds.length > 0) {
           mol.bonds.pop();
+          mol.invalidateChainLength();
           mol.halfLife = mol.estimateHalfLife();
           if (mol.bonds.length === 0 && mol.atoms.length > 1) {
             toRemove.add(mol.id);
@@ -307,6 +308,7 @@ export class Simulation {
       if (zone.wetness > 0.7 && mol.getChainLength() >= 4 && this.rng.next() < this.config.polymerHydrolysisRate * zone.wetness) {
         if (mol.bonds.length > 0) {
           mol.bonds.pop();
+          mol.invalidateChainLength();
         }
       }
 
@@ -353,6 +355,7 @@ export class Simulation {
               });
             }
           }
+          mol.invalidateChainLength();
           mol.mass = mol.atoms.reduce((s, a) => s + ELEMENT_PROPERTIES[a.element].mass, 0);
         }
 
@@ -384,6 +387,7 @@ export class Simulation {
         if (zone.uvIntensity > 0.5 && mol.getChainLength() >= 3) {
           if (mol.bonds.length > 0 && this.rng.next() < 0.3) {
             mol.bonds.pop();
+            mol.invalidateChainLength();
           }
         }
       }

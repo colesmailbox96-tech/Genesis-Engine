@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGameStore } from '../store';
 
 export default function TimeControls() {
-  const { isRunning, speed, startSimulation, pauseSimulation, setSpeed, skipTicks, simulation } = useGameStore();
+  const { isRunning, speed, startSimulation, pauseSimulation, setSpeed, skipTicks, simulation, saveState } = useGameStore();
+  const [saveFlash, setSaveFlash] = useState(false);
 
   if (!simulation) return null;
 
@@ -13,6 +14,14 @@ export default function TimeControls() {
     { label: '▶▶▶', speed: 20, action: () => { setSpeed(20); startSimulation(); } },
     { label: '⏭', speed: 100, action: () => { setSpeed(100); startSimulation(); } },
   ];
+
+  const handleSave = () => {
+    const success = saveState();
+    if (success) {
+      setSaveFlash(true);
+      setTimeout(() => setSaveFlash(false), 1200);
+    }
+  };
 
   return (
     <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-2 bg-black/60 z-20">
@@ -36,6 +45,17 @@ export default function TimeControls() {
           title="Skip 10K ticks"
         >
           +10K
+        </button>
+        <button
+          onClick={handleSave}
+          className={`px-2 py-1 rounded text-xs font-mono ml-1 transition-colors ${
+            saveFlash
+              ? 'bg-green-600 text-white'
+              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+          }`}
+          title="Save simulation"
+        >
+          {saveFlash ? '✓' : '💾'}
         </button>
       </div>
       <div className="flex items-center gap-3">

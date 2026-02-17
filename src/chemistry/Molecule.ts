@@ -45,6 +45,7 @@ export class Molecule implements SpatialEntity {
   role: MoleculeRole;
   formation: FormationRecord | null;
   halfLife: number;
+  private _cachedChainLength: number = -1;
 
   constructor(
     atoms: Atom[],
@@ -116,8 +117,14 @@ export class Molecule implements SpatialEntity {
     return formula;
   }
 
+  /** Invalidate cached chain length when bonds change */
+  invalidateChainLength(): void {
+    this._cachedChainLength = -1;
+  }
+
   getChainLength(): number {
-    if (this.atoms.length === 0) return 0;
+    if (this._cachedChainLength >= 0) return this._cachedChainLength;
+    if (this.atoms.length === 0) { this._cachedChainLength = 0; return 0; }
     // BFS to find the longest chain
     const adj: number[][] = Array.from({ length: this.atoms.length }, () => []);
     for (const bond of this.bonds) {
@@ -140,6 +147,7 @@ export class Molecule implements SpatialEntity {
         }
       }
     }
+    this._cachedChainLength = maxLen;
     return maxLen;
   }
 
@@ -223,7 +231,7 @@ export class Molecule implements SpatialEntity {
 
   tick(): void {
     this.age++;
-    this.position = this.position.add(this.velocity);
+    this.position.addMut(this.velocity);
   }
 
   static createRandom(element: Element, position: Vector2, _rng: Random): Molecule {

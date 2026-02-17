@@ -9,6 +9,7 @@ export class SpatialHash<T extends SpatialEntity> {
   private cellSize: number;
   private cells: Map<number, T[]> = new Map();
   private entityCells: Map<string, number> = new Map();
+  private _queryBuffer: T[] = [];
 
   constructor(cellSize: number) {
     this.cellSize = cellSize;
@@ -73,6 +74,36 @@ export class SpatialHash<T extends SpatialEntity> {
       }
     }
     return results;
+  }
+
+  /** Reusable-buffer query that avoids allocating a new array each call.
+   *  WARNING: The returned array is shared and will be overwritten on the next
+   *  call to queryReuse(). Copy the contents if you need to retain them. */
+  queryReuse(x: number, y: number, radius: number): T[] {
+    const buf = this._queryBuffer;
+    buf.length = 0;
+    const minCx = Math.floor((x - radius) / this.cellSize);
+    const maxCx = Math.floor((x + radius) / this.cellSize);
+    const minCy = Math.floor((y - radius) / this.cellSize);
+    const maxCy = Math.floor((y + radius) / this.cellSize);
+    const radiusSq = radius * radius;
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+      for (let cy = minCy; cy <= maxCy; cy++) {
+        const key = cx * 73856093 + cy * 19349663;
+        const cell = this.cells.get(key);
+        if (cell) {
+          for (const entity of cell) {
+            const dx = entity.position.x - x;
+            const dy = entity.position.y - y;
+            if (dx * dx + dy * dy <= radiusSq) {
+              buf.push(entity);
+            }
+          }
+        }
+      }
+    }
+    return buf;
   }
 
   queryRect(x: number, y: number, w: number, h: number): T[] {

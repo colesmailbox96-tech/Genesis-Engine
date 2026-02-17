@@ -102,6 +102,12 @@ export default function GameCanvas() {
         if (state.simulation.tick % 30 === 0) {
           state.updateStats();
         }
+
+        // Update perf metrics from game loop
+        const perf = loop.performanceMetrics;
+        if (perf.fps > 0) {
+          state.updatePerf(perf.fps, perf.tps);
+        }
       }
     );
 

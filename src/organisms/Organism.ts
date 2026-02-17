@@ -124,14 +124,11 @@ export class Organism implements SpatialEntity {
     const speed = Math.abs(this.actuatorOutputs[MOVE_SPEED] ?? 0);
 
     const moveVec = new Vector2(moveX, moveY).normalize().mul(speed * this.phenotype.maxSpeed);
-    this.velocity = moveVec;
-    this.position = this.position.add(this.velocity);
+    this.velocity.setFrom(moveVec);
+    this.position.addMut(this.velocity);
 
-    // Wrap around world
-    this.position = new Vector2(
-      ((this.position.x % worldSize) + worldSize) % worldSize,
-      ((this.position.y % worldSize) + worldSize) % worldSize
-    );
+    // Wrap around world (in-place)
+    this.position.wrapMut(worldSize);
 
     // Movement energy cost
     const moveCost = moveVec.length() * 0.005;

@@ -4,6 +4,7 @@ import { SimConfig, DEFAULT_CONFIG } from './engine/Config';
 import { Organism } from './organisms/Organism';
 import { Molecule } from './chemistry/Molecule';
 import { Protocell } from './proto/Protocell';
+import { SaveSystem, SaveData } from './data/SaveSystem';
 
 export interface GameStore {
   // Simulation
@@ -29,6 +30,8 @@ export interface GameStore {
   speciesCount: number;
   moleculeCount: number;
   milestones: MilestoneEvent[];
+  fps: number;
+  tps: number;
 
   // Actions
   initSimulation: (seed?: number, config?: SimConfig) => void;
@@ -43,6 +46,12 @@ export interface GameStore {
   setShowStats: (show: boolean) => void;
   setVolume: (volume: number) => void;
   updateStats: () => void;
+  updatePerf: (fps: number, tps: number) => void;
+  saveState: () => boolean;
+  loadSavedState: () => SaveData | null;
+  hasSavedState: () => boolean;
+  clearSavedState: () => void;
+  restoreFromSave: () => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -61,6 +70,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   population: 0,
   speciesCount: 0,
   moleculeCount: 0,
+  fps: 0,
+  tps: 0,
   milestones: [],
 
   initSimulation: (seed, config) => {
@@ -110,5 +121,61 @@ export const useGameStore = create<GameStore>((set, get) => ({
       newState.milestones = [...sim.milestones];
     }
     set(newState);
+  },
+
+  updatePerf: (fps, tps) => set({ fps, tps }),
+
+  saveState: () => {
+    const sim = get().simulation;
+    if (!sim) return false;
+    const stats = sim.getStats();
+    return SaveSystem.save({
+      seed: get().seed,
+      tick: stats.tick,
+      milestoneCount: stats.milestoneCount,
+      population: stats.population,
+      speciesCount: stats.speciesCount,
+      moleculeCount: stats.moleculeCount,
+    });
+  },
+
+  loadSavedState: () => SaveSystem.load(),
+
+  hasSavedState: () => SaveSystem.hasSave(),
+
+  clearSavedState: () => SaveSystem.clear(),
+
+  restoreFromSave: () => {
+    const save = SaveSystem.load();
+    if (!save) return;
+    const sim = new Simulation(DEFAULT_CONFIG, save.seed);
+
+    // Fast-forward in batches to avoid blocking the UI thread
+    const BATCH_SIZE = 500;
+    let i = 0;
+
+    const processBatch = () => {
+      const end = Math.min(i + BATCH_SIZE, save.tick);
+      while (i < end) {
+        sim.update();
+        i++;
+      }
+
+      if (i < save.tick) {
+        // Yield to browser, then continue
+        setTimeout(processBatch, 0);
+      } else {
+        // Restoration complete
+        set({
+          simulation: sim,
+          seed: save.seed,
+          showWelcome: false,
+          tick: save.tick,
+        });
+        get().updateStats();
+      }
+    };
+
+    processBatch();
   },
 }));
