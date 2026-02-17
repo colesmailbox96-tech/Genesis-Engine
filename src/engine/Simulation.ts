@@ -35,9 +35,16 @@ import { Ecosystem } from '../ecology/Ecosystem';
 import { FoodWeb } from '../ecology/FoodWeb';
 import { ResourceCycle } from '../ecology/ResourceCycle';
 import { ExtinctionEventSystem } from '../ecology/ExtinctionEvent';
+import { SymbiosisSystem } from '../ecology/Symbiosis';
+import { CoevolutionSystem } from '../ecology/Coevolution';
+
+// Evolution (new)
+import { PopulationGenetics } from '../evolution/PopulationGenetics';
+import { applyPlasticity } from '../evolution/PhenotypicPlasticity';
 
 // Discovery
 import { CommunicationSystem } from '../discovery/Communication';
+import { SocialLearningTracker } from '../discovery/SocialLearning';
 import { CultureTracker, DiscoveryType } from '../discovery/CultureTracker';
 
 // Data
@@ -83,7 +90,13 @@ export class Simulation {
 
   // Discovery
   communicationSystem: CommunicationSystem;
+  socialLearning: SocialLearningTracker;
   cultureTracker: CultureTracker;
+
+  // New systems
+  symbiosisSystem: SymbiosisSystem;
+  coevolutionSystem: CoevolutionSystem;
+  populationGenetics: PopulationGenetics;
 
   // Data
   dataLogger: DataLogger;
@@ -112,7 +125,11 @@ export class Simulation {
     this.resourceCycle = new ResourceCycle();
     this.extinctionSystem = new ExtinctionEventSystem();
     this.communicationSystem = new CommunicationSystem();
+    this.socialLearning = new SocialLearningTracker();
     this.cultureTracker = new CultureTracker();
+    this.symbiosisSystem = new SymbiosisSystem();
+    this.coevolutionSystem = new CoevolutionSystem();
+    this.populationGenetics = new PopulationGenetics();
     this.dataLogger = new DataLogger();
     this.metricsCollector = new MetricsCollector(100);
 
@@ -575,6 +592,9 @@ export class Simulation {
       const dayFactor = 0.5 + 0.5 * Math.sin((this.tick / this.config.dayNightPeriod) * Math.PI * 2);
       org.metabolize(envEnergy, zone.uvIntensity * dayFactor);
 
+      // Phenotypic Plasticity: adapt traits to local environment
+      applyPlasticity(org, zone);
+
       // Communication
       this.communicationSystem.emitSignal(org, this.tick);
 
@@ -636,6 +656,68 @@ export class Simulation {
     // Speciation (every 500 ticks)
     if (this.tick % 500 === 0 && organisms.length > 0) {
       this.speciationSystem.assignSpecies(organisms);
+    }
+
+    // Social Learning: record profiles and check for learning events (every 50 ticks)
+    if (this.tick % 50 === 0 && organisms.length > 1) {
+      this.socialLearning.recordProfiles(organisms);
+      const learningEvent = this.socialLearning.check(
+        organisms,
+        this.tick,
+        (x, y, r) => this.organismManager.getNearby(x, y, r)
+      );
+      if (learningEvent && !this.milestoneSet.has('SOCIAL_LEARNING')) {
+        this.addMilestone('SOCIAL_LEARNING', `First social learning: ${learningEvent.behavior}`);
+        this.cultureTracker.record({
+          type: DiscoveryType.TEACHING,
+          organismId: learningEvent.teacherId,
+          species: organisms.find(o => o.id === learningEvent.teacherId)?.species ?? 0,
+          tick: this.tick,
+          description: `Behavior "${learningEvent.behavior}" learned`,
+          evidence: [learningEvent.learnerId, learningEvent.teacherId],
+        });
+      }
+    }
+
+    // Symbiosis: update bonds and apply effects (every 100 ticks)
+    if (this.tick % 100 === 0 && organisms.length > 1) {
+      this.symbiosisSystem.update(
+        organisms,
+        (x, y, r) => this.organismManager.getNearby(x, y, r)
+      );
+      const orgById = new Map(organisms.map(o => [o.id, o]));
+      this.symbiosisSystem.applyEffects(orgById);
+
+      if (!this.milestoneSet.has('SYMBIOSIS') && this.symbiosisSystem.getBondCount() >= 3) {
+        const bondTypes = this.symbiosisSystem.getBondsByType();
+        this.addMilestone('SYMBIOSIS',
+          `Symbiotic relationships: ${bondTypes.mutualism} mutualism, ${bondTypes.parasitism} parasitism, ${bondTypes.commensalism} commensalism`
+        );
+      }
+    }
+
+    // Coevolution: track arms race dynamics (every 200 ticks)
+    if (this.tick % 200 === 0 && organisms.length > 0) {
+      const metrics = this.coevolutionSystem.update(organisms, this.foodWeb, this.tick);
+      this.coevolutionSystem.applyCoevolutionaryPressure(organisms, this.rng);
+
+      if (!this.milestoneSet.has('ARMS_RACE') && metrics.escalationRate > 0.1) {
+        this.addMilestone('ARMS_RACE', `Predator-prey arms race detected (escalation: ${metrics.escalationRate.toFixed(3)})`);
+      }
+    }
+
+    // Population Genetics: analyze and apply drift (every 500 ticks)
+    if (this.tick % 500 === 0 && organisms.length > 0) {
+      const snapshot = this.populationGenetics.analyze(organisms, this.tick);
+      this.populationGenetics.applyDrift(organisms, this.rng);
+
+      if (!this.milestoneSet.has('GENETIC_DRIFT') && this.populationGenetics.checkBottleneck()) {
+        this.addMilestone('GENETIC_DRIFT', `Population bottleneck detected (Ne: ${snapshot.effectivePopulationSize})`);
+      }
+
+      if (!this.milestoneSet.has('ALLELE_FIXATION') && this.populationGenetics.getTotalFixations() > 0) {
+        this.addMilestone('ALLELE_FIXATION', `First allele fixation (${snapshot.fixationEvents} genes fixed in population)`);
+      }
     }
   }
 
@@ -816,6 +898,10 @@ export class Simulation {
       totalEnergy: this.organismManager.organisms.reduce((s, o) => s + o.energy, 0),
       milestoneCount: this.milestones.length,
       oxygenLevel: this.ecosystem.oxygenLevel,
+      symbioticBonds: this.symbiosisSystem.getBondCount(),
+      socialLearningEvents: this.socialLearning.getEventCount(),
+      heterozygosity: this.populationGenetics.getLatestHeterozygosity(),
+      coevolutionPairs: this.coevolutionSystem.getActivePairCount(),
     };
   }
 }
