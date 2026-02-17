@@ -74,12 +74,17 @@ const PLASTICITY_ENERGY_SCALE = 0.01;
 
 /**
  * Apply plasticity modifiers to an organism's effective traits for this tick.
+ * Call this BEFORE org.act() so that speed and sensor modifiers take effect
+ * during the current tick's movement and sensing.
  * Modifies the organism's energy metabolism and movement without altering genome.
+ *
+ * Returns a restore function that undoes the temporary phenotype modifications
+ * after the tick. Caller must invoke restore() after act() to prevent compounding.
  */
 export function applyPlasticity(
   org: Organism,
   zone: EnvironmentZone
-): void {
+): () => void {
   const mods = computePlasticityModifiers(org, zone);
 
   // Adjust metabolic efficiency for this tick
@@ -88,16 +93,35 @@ export function applyPlasticity(
   const efficiencyDelta = (mods.metabolicEfficiencyMod - 1) * org.phenotype.metabolicEfficiency;
   org.energy += efficiencyDelta * PLASTICITY_ENERGY_SCALE;
 
-  // Speed plasticity affects movement-related energy cost for this tick
+  // Speed plasticity: scale maxSpeed for this tick so act() uses the modified value
+  const origMaxSpeed = org.phenotype.maxSpeed;
   if (mods.speedMod !== 1) {
-    const speedEnergyDelta = (1 - mods.speedMod) * PLASTICITY_ENERGY_SCALE;
-    org.energy += speedEnergyDelta;
+    org.phenotype.maxSpeed *= mods.speedMod;
+  }
+
+  // Sensor sensitivity plasticity: scale sensor sensitivity for this tick
+  const origSensitivities: number[] = [];
+  if (mods.sensorSensitivityMod !== 1) {
+    for (const sensor of org.phenotype.sensors) {
+      origSensitivities.push(sensor.sensitivity);
+      sensor.sensitivity *= mods.sensorSensitivityMod;
+    }
   }
 
   // Shell bonus provides temporary damage resistance via integrity boost
   if (mods.shellMod > 0) {
     org.integrity = clamp(org.integrity + mods.shellMod * 0.001, 0, 1);
   }
+
+  // Return restore function to undo temporary phenotype changes
+  return () => {
+    org.phenotype.maxSpeed = origMaxSpeed;
+    if (origSensitivities.length > 0) {
+      for (let i = 0; i < org.phenotype.sensors.length && i < origSensitivities.length; i++) {
+        org.phenotype.sensors[i].sensitivity = origSensitivities[i];
+      }
+    }
+  };
 }
 
 function getOptimalTemperature(metabolismType: string): number {

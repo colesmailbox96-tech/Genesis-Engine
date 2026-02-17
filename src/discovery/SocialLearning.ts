@@ -36,7 +36,8 @@ export class SocialLearningTracker {
 
   /**
    * Record current behavioral profiles for all organisms.
-   * Call this each tick before check().
+   * Call this before check(), at whatever interval you want to sample
+   * behavior (e.g., every tick or every N ticks).
    */
   recordProfiles(organisms: Organism[]): void {
     // Prune dead organisms
@@ -51,6 +52,22 @@ export class SocialLearningTracker {
         outputs: [...org.actuatorOutputs],
         fitness: org.energy,
       });
+    }
+  }
+
+  /**
+   * Apply learned behavioral biases to an organism's actuator outputs.
+   * Call this after think() to nudge outputs toward the stored learned profile,
+   * ensuring social learning durably affects behavior.
+   */
+  applyLearnedBias(org: Organism): void {
+    const profile = this.behaviorProfiles.get(org.id);
+    if (!profile) return;
+
+    const biasStrength = 0.05;
+    const len = Math.min(org.actuatorOutputs.length, profile.outputs.length);
+    for (let i = 0; i < len; i++) {
+      org.actuatorOutputs[i] += (profile.outputs[i] - org.actuatorOutputs[i]) * biasStrength;
     }
   }
 
@@ -75,8 +92,20 @@ export class SocialLearningTracker {
 
       for (const other of nearby) {
         if (other.id === learner.id || !other.alive) continue;
-        // Must be from different lineage (non-kin)
+        // Must be from different lineage (non-kin): exclude siblings, parent, and children
         if (other.parentId === learner.parentId && learner.parentId !== '') continue;
+        if (other.id === learner.parentId || other.parentId === learner.id) continue;
+
+        // Teacher must have meaningfully higher fitness
+        const teacherProfile = this.behaviorProfiles.get(other.id);
+        if (!teacherProfile) continue;
+
+        // Use similarityThreshold: only learn from organisms with sufficiently different behavior
+        const learnerProfile = this.behaviorProfiles.get(learner.id);
+        if (learnerProfile) {
+          const sim = this.computeSimilarity(learnerProfile.outputs, teacherProfile.outputs);
+          if (sim > this.similarityThreshold) continue; // too similar, nothing to learn
+        }
 
         if (other.energy > bestFitness * this.fitnessAdvantageThreshold) {
           bestTeacher = other;
@@ -149,15 +178,22 @@ export class SocialLearningTracker {
     const profileB = this.behaviorProfiles.get(b.id);
     if (!profileA || !profileB) return 0;
 
+    return this.computeSimilarity(profileA.outputs, profileB.outputs);
+  }
+
+  /**
+   * Compute cosine similarity between two output arrays (0-1).
+   */
+  private computeSimilarity(outputsA: number[], outputsB: number[]): number {
     let dotProduct = 0;
     let magA = 0;
     let magB = 0;
 
-    const len = Math.min(profileA.outputs.length, profileB.outputs.length);
+    const len = Math.min(outputsA.length, outputsB.length);
     for (let i = 0; i < len; i++) {
-      dotProduct += profileA.outputs[i] * profileB.outputs[i];
-      magA += profileA.outputs[i] ** 2;
-      magB += profileB.outputs[i] ** 2;
+      dotProduct += outputsA[i] * outputsB[i];
+      magA += outputsA[i] ** 2;
+      magB += outputsB[i] ** 2;
     }
 
     const denom = Math.sqrt(magA) * Math.sqrt(magB);

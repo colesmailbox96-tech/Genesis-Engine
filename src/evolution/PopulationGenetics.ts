@@ -13,7 +13,7 @@ import { Random } from '../utils/Random';
 
 export interface AlleleFrequency {
   geneType: GeneType;
-  frequency: number;      // 0-1 proportion of population carrying this allele
+  frequency: number;      // 0-1 proportion of enabled gene copies in the population for this gene type (allele frequency)
   previousFrequency: number;
   drift: number;           // rate of change
 }
@@ -24,12 +24,13 @@ export interface PopulationSnapshot {
   effectivePopulationSize: number;
   alleleFrequencies: AlleleFrequency[];
   heterozygosity: number;  // genetic diversity within population
-  fixationEvents: number;  // alleles that reached 100% frequency
+  fixationEvents: number;  // alleles that reached near-fixation (>95% frequency)
 }
 
 export class PopulationGenetics {
   snapshots: PopulationSnapshot[] = [];
   private previousFrequencies = new Map<GeneType, number>();
+  private previousOffspring = new Map<string, number>();
   private totalFixations: number = 0;
   private readonly maxSnapshots = 200;
 
@@ -77,7 +78,7 @@ export class PopulationGenetics {
         drift,
       });
 
-      // Detect fixation: allele present in >95% of population
+      // Detect near-fixation: allele present in >95% of gene copies
       if (freq > 0.95 && prevFreq <= 0.95) {
         fixationEvents++;
         this.totalFixations++;
@@ -91,11 +92,21 @@ export class PopulationGenetics {
     }
 
     // Effective population size (Ne) — accounts for variance in reproductive success
-    // Ne = 4 * N * Nm * Nf / (Nm + Nf)^2, simplified to variance-based estimate
-    const offspringCounts = organisms.map(o => o.offspring);
-    const meanOffspring = offspringCounts.reduce((s, v) => s + v, 0) / organisms.length;
-    const varianceOffspring = offspringCounts.length > 1
-      ? offspringCounts.reduce((s, v) => s + (v - meanOffspring) ** 2, 0) / (offspringCounts.length - 1)
+    // Use per-interval offspring (births since last analysis) to avoid inflation from
+    // cumulative lifetime counts
+    const intervalOffspring = organisms.map(o => {
+      const prev = this.previousOffspring.get(o.id) ?? 0;
+      return o.offspring - prev;
+    });
+    // Update stored offspring counts for next interval
+    this.previousOffspring.clear();
+    for (const o of organisms) {
+      this.previousOffspring.set(o.id, o.offspring);
+    }
+
+    const meanOffspring = intervalOffspring.reduce((s, v) => s + v, 0) / organisms.length;
+    const varianceOffspring = intervalOffspring.length > 1
+      ? intervalOffspring.reduce((s, v) => s + (v - meanOffspring) ** 2, 0) / (intervalOffspring.length - 1)
       : 0;
 
     // Ne ≈ N / (1 + Vk/k) where Vk is variance in offspring, k is mean offspring

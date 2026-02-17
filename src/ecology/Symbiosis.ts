@@ -26,17 +26,39 @@ export class SymbiosisSystem {
    * The type of symbiosis emerges from their energy exchange patterns.
    */
   update(organisms: Organism[], getNearby: (x: number, y: number, r: number) => Organism[]): void {
-    // Decay existing bonds and remove broken ones
-    for (const bond of this.bonds) {
-      bond.ticksActive++;
-      bond.strength = Math.min(1, bond.strength + 0.001);
-    }
-
     // Remove bonds where one partner is dead
     const aliveIds = new Set(organisms.filter(o => o.alive).map(o => o.id));
     this.bonds = this.bonds.filter(
       b => aliveIds.has(b.hostId) && aliveIds.has(b.symbiontId)
     );
+
+    // Build organism lookup for distance checks
+    const orgById = new Map(organisms.filter(o => o.alive).map(o => [o.id, o]));
+
+    // Decay existing bonds: weaken bonds when partners are far apart,
+    // strengthen bonds when partners remain close
+    for (let i = this.bonds.length - 1; i >= 0; i--) {
+      const bond = this.bonds[i];
+      bond.ticksActive++;
+
+      const host = orgById.get(bond.hostId);
+      const symbiont = orgById.get(bond.symbiontId);
+      if (!host || !symbiont) continue;
+
+      const distSq = host.position.distanceSqTo(symbiont.position);
+      const threshold = (host.phenotype.bodyRadius + symbiont.phenotype.bodyRadius + this.proximityBuffer);
+
+      if (distSq <= threshold * threshold) {
+        // Partners are close: strengthen bond
+        bond.strength = Math.min(1, bond.strength + 0.001);
+      } else {
+        // Partners have drifted apart: decay bond
+        bond.strength -= 0.01;
+        if (bond.strength <= 0) {
+          this.bonds.splice(i, 1);
+        }
+      }
+    }
 
     // Check for new bonds forming between close, different-species organisms
     const bonded = new Set<string>();
@@ -47,7 +69,12 @@ export class SymbiosisSystem {
     for (const org of organisms) {
       if (!org.alive) continue;
 
-      const nearby = getNearby(org.position.x, org.position.y, this.proximityThreshold);
+      // Query with a threshold large enough to cover body-radius-based distance
+      const queryRadius = Math.max(
+        this.proximityThreshold,
+        org.phenotype.bodyRadius * 2 + this.proximityBuffer
+      );
+      const nearby = getNearby(org.position.x, org.position.y, queryRadius);
       for (const other of nearby) {
         if (other.id === org.id || !other.alive) continue;
         if (org.species === other.species) continue;
