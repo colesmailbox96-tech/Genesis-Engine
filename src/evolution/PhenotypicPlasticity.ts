@@ -88,9 +88,10 @@ export function applyPlasticity(
   const efficiencyDelta = (mods.metabolicEfficiencyMod - 1) * org.phenotype.metabolicEfficiency;
   org.energy += efficiencyDelta * PLASTICITY_ENERGY_SCALE;
 
-  // Speed is handled through velocity damping
-  if (mods.speedMod < 1) {
-    org.velocity.mulMut(mods.speedMod);
+  // Speed plasticity affects movement-related energy cost for this tick
+  if (mods.speedMod !== 1) {
+    const speedEnergyDelta = (1 - mods.speedMod) * PLASTICITY_ENERGY_SCALE;
+    org.energy += speedEnergyDelta;
   }
 
   // Shell bonus provides temporary damage resistance via integrity boost
