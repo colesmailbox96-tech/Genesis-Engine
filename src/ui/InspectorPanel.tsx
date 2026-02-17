@@ -27,10 +27,12 @@ export default function InspectorPanel() {
 }
 
 function OrganismInspector({ org }: { org: Organism }) {
+  const { simulation } = useGameStore();
   const nodeCount = org.genome.neuralGenome.nodeGenes.length;
   const connCount = org.genome.neuralGenome.connectionGenes.filter(c => c.enabled).length;
   const energyPct = Math.round((org.energy / org.phenotype.energyCapacity) * 100);
   const intPct = Math.round(org.integrity * 100);
+  const bonds = simulation?.symbiosisSystem.getBondsForOrganism(org.id) ?? [];
 
   return (
     <div className="space-y-2 text-gray-300">
@@ -62,6 +64,14 @@ function OrganismInspector({ org }: { org: Organism }) {
         {org.phenotype.shellThickness > 0 && <div>Shell: {(org.phenotype.shellThickness * 100).toFixed(0)}%</div>}
         {org.phenotype.camouflageLevel > 0 && <div>Camo: {(org.phenotype.camouflageLevel * 100).toFixed(0)}%</div>}
       </div>
+      {bonds.length > 0 && (
+        <div className="border-t border-gray-700 pt-2 mt-2">
+          <div className="text-cyan-400 text-[10px]">Symbiotic Bonds</div>
+          {bonds.map((b, i) => (
+            <div key={i}>{b.type} (strength: {b.strength.toFixed(2)})</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

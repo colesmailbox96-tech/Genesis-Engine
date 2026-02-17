@@ -34,6 +34,10 @@ export default function StatsDashboard() {
           <StatCard label="Avg Chain Length" value={lastSnapshot.avgChainLength.toFixed(1)} />
           <StatCard label="Energy Flux" value={lastSnapshot.energyFlux.toFixed(1)} />
           <StatCard label="Extinction Rate" value={lastSnapshot.extinctionRate} />
+          <StatCard label="Symbiotic Bonds" value={simulation.symbiosisSystem.getBondCount()} />
+          <StatCard label="Learning Events" value={simulation.socialLearning.getEventCount()} />
+          <StatCard label="Heterozygosity" value={simulation.populationGenetics.getLatestHeterozygosity().toFixed(3)} />
+          <StatCard label="Coevo Pairs" value={simulation.coevolutionSystem.getActivePairCount()} />
         </div>
       )}
 
