@@ -30,6 +30,10 @@ export default function StatsDashboard() {
           <StatCard label="O₂ Level" value={(simulation.ecosystem.oxygenLevel * 100).toFixed(1) + '%'} />
           <StatCard label="Trophic Levels" value={simulation.ecosystem.trophicLevelCount} />
           <StatCard label="Food Web Links" value={simulation.foodWeb.links.length} />
+          <StatCard label="Diversity Index" value={lastSnapshot.diversityIndex.toFixed(3)} />
+          <StatCard label="Avg Chain Length" value={lastSnapshot.avgChainLength.toFixed(1)} />
+          <StatCard label="Energy Flux" value={lastSnapshot.energyFlux.toFixed(1)} />
+          <StatCard label="Extinction Rate" value={lastSnapshot.extinctionRate} />
         </div>
       )}
 

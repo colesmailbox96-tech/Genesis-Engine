@@ -21,6 +21,16 @@ export interface CatalyticSite {
   efficiency: number;
 }
 
+export type MoleculeRole = 'food' | 'waste' | 'catalyst' | 'membrane' | 'genome_segment' | 'toxin' | 'unknown';
+
+export interface FormationRecord {
+  parentFormulas: string[];
+  reactionType: string;
+  zoneName: string;
+  catalystFormula: string | null;
+  tick: number;
+}
+
 export class Molecule implements SpatialEntity {
   id: string;
   atoms: Atom[];
@@ -32,6 +42,9 @@ export class Molecule implements SpatialEntity {
   mass: number;
   polarity: number;
   catalyticSites: CatalyticSite[];
+  role: MoleculeRole;
+  formation: FormationRecord | null;
+  halfLife: number;
 
   constructor(
     atoms: Atom[],
@@ -49,6 +62,28 @@ export class Molecule implements SpatialEntity {
     this.mass = this.computeMass();
     this.polarity = this.computePolarity();
     this.catalyticSites = [];
+    this.role = 'unknown';
+    this.formation = null;
+    this.halfLife = this.estimateHalfLife();
+  }
+
+  estimateHalfLife(): number {
+    // Estimate stability based on bond count and types
+    const avgBondStrength = this.bonds.length > 0
+      ? this.bonds.reduce((s, b) => s + b.strength, 0) / this.bonds.length
+      : 0;
+    // Base half-life scales with bonds; stronger bonds = longer half-life
+    return Math.max(100, (this.bonds.length * avgBondStrength * 5000) + 500);
+  }
+
+  inferRole(): MoleculeRole {
+    if (this.catalyticSites.length > 0) return 'catalyst';
+    if (this.hasLongCarbonChain() && this.polarity > 0.3) return 'membrane';
+    if (this.hasPhosphorusRing() || (this.hasCNChain() && this.getChainLength() >= 4)) return 'genome_segment';
+    if (this.atoms.length <= 2 && this.energy > 0) return 'food';
+    if (this.polarity > 0.5 && this.atoms.some(a => a.element === Element.S)) return 'toxin';
+    if (this.atoms.length <= 1) return 'waste';
+    return 'unknown';
   }
 
   private computeMass(): number {

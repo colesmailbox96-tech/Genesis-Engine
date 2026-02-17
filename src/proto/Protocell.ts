@@ -11,6 +11,8 @@ export interface Membrane {
   permeability: Record<string, number>;
   stability: number;
   surfaceMolecules: Molecule[];
+  osmoticPressure: number;
+  maxCapacity: number;
 }
 
 export class Protocell implements SpatialEntity {
@@ -35,6 +37,8 @@ export class Protocell implements SpatialEntity {
       permeability: { H2: 0.8, CO2: 0.7 },
       stability: 0.5 + lipidCount * 0.02,
       surfaceMolecules: [],
+      osmoticPressure: 0,
+      maxCapacity: lipidCount * 3,
     };
     this.interior = [];
     this.replicators = [];
@@ -65,6 +69,13 @@ export class Protocell implements SpatialEntity {
     // Membrane stability affected by temperature
     const tempFactor = 1 - Math.abs(temperature - 0.5) * 0.5;
     this.integrity = Math.min(1, this.membrane.stability * tempFactor);
+
+    // Osmotic pressure: internal molecule count vs capacity
+    this.membrane.osmoticPressure = this.interior.length / Math.max(1, this.membrane.maxCapacity);
+    if (this.membrane.osmoticPressure > 1.5) {
+      // Osmotic lysis — too much internal pressure
+      this.integrity -= (this.membrane.osmoticPressure - 1.5) * 0.1;
+    }
 
     // Movement from currents
     this.position = this.position.add(this.velocity);
@@ -141,8 +152,13 @@ export class Protocell implements SpatialEntity {
 
   absorbMolecule(mol: Molecule): boolean {
     const formula = mol.getFormula();
-    const perm = this.membrane.permeability[formula] ?? 0.1;
-    if (Math.random() < perm && mol.atoms.length <= 5) {
+    const formulaPerm = this.membrane.permeability[formula] ?? 0.1;
+    // Size-based permeability: smaller molecules pass through easier
+    const sizeFactor = Math.max(0, 1 - mol.atoms.length * 0.15);
+    const perm = formulaPerm * (0.5 + 0.5 * sizeFactor);
+    // Check osmotic capacity
+    if (this.interior.length >= this.membrane.maxCapacity) return false;
+    if (Math.random() < perm && mol.atoms.length <= 8) {
       this.interior.push(mol);
       this.energy += mol.energy * 0.1;
       return true;

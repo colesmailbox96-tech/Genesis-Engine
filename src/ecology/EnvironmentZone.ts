@@ -15,6 +15,12 @@ export interface EnvironmentZone {
   pressure: number;
   cyclePhase: number;
   cyclePeriod: number;
+  pH: number;
+  redoxPotential: number;
+  wetness: number;
+  catalyticBias: number;
+  diffusionRate: number;
+  toxinLevel: number;
 }
 
 export class EnvironmentMap {
@@ -46,25 +52,32 @@ export class EnvironmentMap {
 
         let zoneType: ZoneType;
         let temp: number, energyDensity: number, uv: number, pressure: number;
+        let pH: number, redoxPotential: number, catalyticBias: number, diffusionRate: number;
 
         if (elevation < -0.3) {
           zoneType = 'deep_ocean';
           temp = 0.2; energyDensity = 0.1; uv = 0; pressure = 0.9;
+          pH = 7.8; redoxPotential = -0.2; catalyticBias = 0.1; diffusionRate = 0.05;
         } else if (elevation < -0.1 && heat > 0.2) {
           zoneType = 'hydrothermal_vent';
           temp = 0.9; energyDensity = 0.9; uv = 0; pressure = 0.8;
+          pH = 3.0; redoxPotential = 0.8; catalyticBias = 0.7; diffusionRate = 0.2;
         } else if (elevation < 0.1 && moisture > 0) {
           zoneType = 'shallow_pool';
           temp = 0.5; energyDensity = 0.5; uv = 0.7; pressure = 0.3;
+          pH = 6.5; redoxPotential = 0.3; catalyticBias = 0.3; diffusionRate = 0.15;
         } else if (elevation < 0.2) {
           zoneType = 'tidal_zone';
           temp = 0.4; energyDensity = 0.4; uv = 0.5; pressure = 0.4;
+          pH = 7.0; redoxPotential = 0.2; catalyticBias = 0.4; diffusionRate = 0.25;
         } else if (heat > 0.1) {
           zoneType = 'volcanic_shore';
           temp = 0.7; energyDensity = 0.6; uv = 0.3; pressure = 0.3;
+          pH = 4.5; redoxPotential = 0.6; catalyticBias = 0.5; diffusionRate = 0.1;
         } else {
           zoneType = 'ice_region';
           temp = 0.1; energyDensity = 0.2; uv = 0.4; pressure = 0.2;
+          pH = 7.5; redoxPotential = 0.0; catalyticBias = 0.2; diffusionRate = 0.02;
         }
 
         const zoneIndex = (['deep_ocean', 'hydrothermal_vent', 'shallow_pool', 'tidal_zone', 'volcanic_shore', 'ice_region'] as ZoneType[]).indexOf(zoneType);
@@ -89,6 +102,12 @@ export class EnvironmentMap {
           pressure,
           cyclePhase: 0,
           cyclePeriod: zoneType === 'tidal_zone' ? 500 : 1000,
+          pH,
+          redoxPotential,
+          wetness: 1.0,
+          catalyticBias,
+          diffusionRate,
+          toxinLevel: 0,
         };
       }
     }
@@ -121,6 +140,22 @@ export class EnvironmentMap {
         if (zone.type === 'tidal_zone') {
           zone.flowSpeed = 0.1 + 0.3 * Math.abs(Math.sin(zone.cyclePhase * Math.PI * 2));
         }
+
+        // Wet/dry cycles (tidal and shallow zones oscillate)
+        if (zone.type === 'tidal_zone' || zone.type === 'shallow_pool') {
+          const wetDryPhase = (tick % 5000) / 5000;
+          zone.wetness = 0.3 + 0.7 * Math.abs(Math.sin(wetDryPhase * Math.PI));
+        }
+
+        // Seasonal temperature variation
+        const seasonalPhase = (tick % 20000) / 20000;
+        const seasonalFactor = 0.85 + 0.15 * Math.sin(seasonalPhase * Math.PI * 2);
+        if (zone.type !== 'hydrothermal_vent') {
+          zone.temperature = zone.temperature * seasonalFactor;
+        }
+
+        // Toxin decay
+        zone.toxinLevel = Math.max(0, zone.toxinLevel * 0.999);
       }
     }
   }

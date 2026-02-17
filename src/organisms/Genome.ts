@@ -209,6 +209,32 @@ export class Genome {
     return new Genome(newGenes, newNeural, this.mutationRate + rng.gaussian(0, 0.001));
   }
 
+  /** Horizontal gene transfer: absorb genes from another genome */
+  horizontalTransfer(donor: Genome, rng: Random): Genome {
+    const newGenes = [...this.genes.map(g => ({ ...g, parameters: [...g.parameters] }))];
+
+    // Transfer 1-3 random genes from donor
+    const transferCount = rng.int(1, Math.min(4, donor.genes.length + 1));
+    for (let i = 0; i < transferCount; i++) {
+      const donorGene = rng.pick(donor.genes);
+      newGenes.push({ ...donorGene, parameters: [...donorGene.parameters] });
+    }
+
+    return new Genome(newGenes, this.neuralGenome, this.mutationRate);
+  }
+
+  /** Gene duplication: duplicate a random gene */
+  duplicateGene(rng: Random): void {
+    if (this.genes.length > 0 && this.genes.length < 50) {
+      const gene = rng.pick(this.genes);
+      this.genes.push({
+        ...gene,
+        parameters: [...gene.parameters],
+        regulatory: gene.regulatory * (0.8 + rng.next() * 0.4),
+      });
+    }
+  }
+
   crossover(other: Genome, rng: Random): Genome {
     const maxLen = Math.max(this.genes.length, other.genes.length);
     const newGenes: Gene[] = [];
