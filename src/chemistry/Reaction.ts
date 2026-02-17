@@ -191,13 +191,13 @@ export class ReactionSystem {
 
   private executeDecomposition(
     mol1: Molecule,
-    _mol2: Molecule,
+    mol2: Molecule,
     totalEnergy: number,
     position: Vector2,
     rng: Random,
   ): Molecule[] {
     // Split the larger molecule
-    const source = mol1.atoms.length >= _mol2.atoms.length ? mol1 : _mol2;
+    const source = mol1.atoms.length >= mol2.atoms.length ? mol1 : mol2;
     if (source.atoms.length <= 1) {
       return [new Molecule([...source.atoms], [], position, totalEnergy)];
     }
@@ -249,7 +249,7 @@ export class ReactionSystem {
     return [p1, p2];
   }
 
-  private findAvailableBondSite(atoms: Atom[], bonds: Bond[], _baseOffset: number): number {
+  private findAvailableBondSite(atoms: Atom[], _bonds: Bond[], _baseOffset: number): number {
     for (let i = 0; i < atoms.length; i++) {
       const maxBonds = ELEMENT_PROPERTIES[atoms[i].element].bondSites;
       if (atoms[i].bondCount < maxBonds) return i;
