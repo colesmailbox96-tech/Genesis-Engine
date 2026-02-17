@@ -106,10 +106,21 @@ export class SocialLearningTracker {
       // Only learn if behaviors are meaningfully different
       if (maxDiff < 0.2) continue;
 
-      // Apply learning: nudge learner's outputs toward teacher's pattern
+      // Apply learning: nudge learner's persistent behavior profile toward teacher's pattern
+      let learnerProfile = this.behaviorProfiles.get(learner.id);
+      if (!learnerProfile) {
+        // Initialize a behavior profile for the learner based on current outputs and energy
+        learnerProfile = {
+          outputs: learner.actuatorOutputs.slice(),
+          fitness: learner.energy,
+        };
+        this.behaviorProfiles.set(learner.id, learnerProfile);
+      }
+
       const learningRate = 0.1;
-      for (let i = 0; i < Math.min(learner.actuatorOutputs.length, teacherProfile.outputs.length); i++) {
-        learner.actuatorOutputs[i] += (teacherProfile.outputs[i] - learner.actuatorOutputs[i]) * learningRate;
+      const len = Math.min(learnerProfile.outputs.length, teacherProfile.outputs.length);
+      for (let i = 0; i < len; i++) {
+        learnerProfile.outputs[i] += (teacherProfile.outputs[i] - learnerProfile.outputs[i]) * learningRate;
       }
 
       const event: SocialLearningEvent = {
