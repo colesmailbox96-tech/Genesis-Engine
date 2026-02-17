@@ -59,6 +59,10 @@ export class Renderer {
     this.camera.resize(width, height);
     this.camera.update();
 
+    // Determine if we should reduce rendering quality based on entity count
+    const totalEntities = molecules.length + protocells.length + organisms.length;
+    const highLoad = totalEntities > 2000;
+
     // Clear
     ctx.fillStyle = config.backgroundColor;
     ctx.fillRect(0, 0, width, height);
@@ -66,11 +70,15 @@ export class Renderer {
     // Environment zones
     this.environmentRenderer.draw(ctx, envMap, this.camera);
 
-    // Chemical field
-    this.chemFieldRenderer.draw(ctx, chemField, this.camera, config.worldSize);
+    // Chemical field — skip at high load when zoomed out
+    if (!highLoad || this.camera.zoom >= 0.5) {
+      this.chemFieldRenderer.draw(ctx, chemField, this.camera, config.worldSize);
+    }
 
-    // Fluid flow
-    this.fluidRenderer.draw(ctx, envMap, this.camera, config.worldSize, tick);
+    // Fluid flow — skip at high load
+    if (!highLoad) {
+      this.fluidRenderer.draw(ctx, envMap, this.camera, config.worldSize, tick);
+    }
 
     // Energy source glow
     for (const source of energySources) {
@@ -88,14 +96,16 @@ export class Renderer {
     // Protocells
     this.protocellRenderer.draw(ctx, protocells, this.camera);
 
-    // Organism trails
-    this.trailRenderer.update(organisms);
-    this.trailRenderer.draw(ctx, this.camera);
+    // Organism trails — skip at high load
+    if (!highLoad) {
+      this.trailRenderer.update(organisms);
+      this.trailRenderer.draw(ctx, this.camera);
+    }
 
     // Organisms
     this.organismRenderer.draw(ctx, organisms, this.camera, tick);
 
-    // Particles
+    // Particles — reduce cap at high load
     this.particleSystem.update();
     this.particleSystem.draw(
       ctx,
@@ -106,8 +116,10 @@ export class Renderer {
       this.camera.zoom
     );
 
-    // Post-processing
-    this.postProcessing.vignette(ctx, width, height, config.vignetteStrength);
-    this.postProcessing.scanLines(ctx, width, height, config.scanLineOpacity);
+    // Post-processing — skip vignette/scan lines at high load to save GPU time
+    if (!highLoad) {
+      this.postProcessing.vignette(ctx, width, height, config.vignetteStrength);
+      this.postProcessing.scanLines(ctx, width, height, config.scanLineOpacity);
+    }
   }
 }

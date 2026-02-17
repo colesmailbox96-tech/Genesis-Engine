@@ -29,12 +29,16 @@ export class EnvironmentMap {
   private worldSize: number;
   private noise: SimplexNoise;
   private zoneData: EnvironmentZone[][] = [];
+  private baseTemperatures: Float32Array;
+  private baseUvIntensities: Float32Array;
 
   constructor(worldSize: number, gridSize: number = 64, seed: number = 42) {
     this.worldSize = worldSize;
     this.gridSize = gridSize;
     this.noise = new SimplexNoise(seed);
     this.zones = new Float32Array(gridSize * gridSize);
+    this.baseTemperatures = new Float32Array(gridSize * gridSize);
+    this.baseUvIntensities = new Float32Array(gridSize * gridSize);
     this.generateZones();
   }
 
@@ -109,6 +113,11 @@ export class EnvironmentMap {
           diffusionRate,
           toxinLevel: 0,
         };
+
+        // Store base values for cycle calculations
+        const idx = y * this.gridSize + x;
+        this.baseTemperatures[idx] = temp;
+        this.baseUvIntensities[idx] = uv;
       }
     }
   }
@@ -129,11 +138,15 @@ export class EnvironmentMap {
     for (let y = 0; y < this.gridSize; y++) {
       for (let x = 0; x < this.gridSize; x++) {
         const zone = this.zoneData[y][x];
+        const idx = y * this.gridSize + x;
         zone.cyclePhase = (tick % zone.cyclePeriod) / zone.cyclePeriod;
+
+        // Restore UV from base value before applying cycle modulation
+        const baseUv = this.baseUvIntensities[idx];
 
         // Day/night for UV
         if (zone.type === 'shallow_pool' || zone.type === 'tidal_zone') {
-          zone.uvIntensity *= 0.5 + 0.5 * Math.sin(zone.cyclePhase * Math.PI * 2);
+          zone.uvIntensity = baseUv * (0.5 + 0.5 * Math.sin(zone.cyclePhase * Math.PI * 2));
         }
 
         // Tidal flow changes
@@ -147,11 +160,12 @@ export class EnvironmentMap {
           zone.wetness = 0.3 + 0.7 * Math.abs(Math.sin(wetDryPhase * Math.PI));
         }
 
-        // Seasonal temperature variation
-        const seasonalPhase = (tick % 20000) / 20000;
-        const seasonalFactor = 0.85 + 0.15 * Math.sin(seasonalPhase * Math.PI * 2);
+        // Seasonal temperature variation — compute from base value to avoid drift
+        const baseTemp = this.baseTemperatures[idx];
         if (zone.type !== 'hydrothermal_vent') {
-          zone.temperature = zone.temperature * seasonalFactor;
+          const seasonalPhase = (tick % 20000) / 20000;
+          const seasonalFactor = 0.85 + 0.15 * Math.sin(seasonalPhase * Math.PI * 2);
+          zone.temperature = baseTemp * seasonalFactor;
         }
 
         // Toxin decay

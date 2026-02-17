@@ -20,10 +20,27 @@ export class PostProcessing {
     ctx.fillRect(0, 0, width, height);
   }
 
+  private scanLinePattern: CanvasPattern | null = null;
+  private cachedScanLineOpacity: number = -1;
+
   scanLines(ctx: CanvasRenderingContext2D, width: number, height: number, opacity: number): void {
-    ctx.fillStyle = `rgba(0,0,0,${opacity})`;
-    for (let y = 0; y < height; y += 3) {
-      ctx.fillRect(0, y, width, 1);
+    if (opacity <= 0) return;
+
+    // Create/update cached scan line pattern
+    if (!this.scanLinePattern || this.cachedScanLineOpacity !== opacity) {
+      const patternCanvas = document.createElement('canvas');
+      patternCanvas.width = 1;
+      patternCanvas.height = 3;
+      const pCtx = patternCanvas.getContext('2d')!;
+      pCtx.fillStyle = `rgba(0,0,0,${opacity})`;
+      pCtx.fillRect(0, 0, 1, 1);
+      this.scanLinePattern = ctx.createPattern(patternCanvas, 'repeat');
+      this.cachedScanLineOpacity = opacity;
+    }
+
+    if (this.scanLinePattern) {
+      ctx.fillStyle = this.scanLinePattern;
+      ctx.fillRect(0, 0, width, height);
     }
   }
 

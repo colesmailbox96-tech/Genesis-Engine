@@ -422,7 +422,7 @@ export class Simulation {
     }
 
     const newProtocells: Protocell[] = [];
-    const deadProtocells: string[] = [];
+    const deadProtocellIds = new Set<string>();
 
     for (const cell of this.protocells) {
       const zone = this.environmentMap.getZoneAt(cell.position.x, cell.position.y);
@@ -434,25 +434,28 @@ export class Simulation {
       }
 
       if (cell.energy <= 0 || cell.integrity <= 0) {
-        deadProtocells.push(cell.id);
+        deadProtocellIds.add(cell.id);
         // Release contents back to environment
         this.resourceCycle.addDeadOrganism(cell.energy);
       }
 
-      // Absorb nearby molecules
+      // Absorb nearby molecules — collect IDs to remove in batch
       const nearby = this.moleculeSpatialHash.query(cell.position.x, cell.position.y, cell.size + 2);
+      const absorbedIds = new Set<string>();
       for (const mol of nearby) {
         if (cell.absorbMolecule(mol)) {
-          const idx = this.molecules.indexOf(mol);
-          if (idx >= 0) this.molecules.splice(idx, 1);
+          absorbedIds.add(mol.id);
         }
+      }
+      if (absorbedIds.size > 0) {
+        this.molecules = this.molecules.filter(m => !absorbedIds.has(m.id));
       }
 
       this.protoSelection.track(cell);
     }
 
-    // Remove dead protocells
-    this.protocells = this.protocells.filter(c => !deadProtocells.includes(c.id));
+    // Remove dead protocells using Set lookup
+    this.protocells = this.protocells.filter(c => !deadProtocellIds.has(c.id));
 
     // Add new protocells
     this.protocells.push(...newProtocells);
@@ -465,7 +468,9 @@ export class Simulation {
   }
 
   private checkProtocellFormation(): void {
+    const absorbedMolIds = new Set<string>();
     for (const mol of this.molecules) {
+      if (absorbedMolIds.has(mol.id)) continue;
       if (mol.hasLongCarbonChain() && mol.atoms.length >= 6) {
         const nearby = this.moleculeSpatialHash.query(mol.position.x, mol.position.y, 3);
         const fattyCount = nearby.filter(m => m.hasLongCarbonChain() && m.atoms.length >= 4).length;
@@ -476,9 +481,8 @@ export class Simulation {
           // Absorb some nearby molecules
           let absorbed = 0;
           for (const nearMol of nearby) {
-            if (absorbed < 10 && cell.absorbMolecule(nearMol)) {
-              const idx = this.molecules.indexOf(nearMol);
-              if (idx >= 0) this.molecules.splice(idx, 1);
+            if (absorbed < 10 && !absorbedMolIds.has(nearMol.id) && cell.absorbMolecule(nearMol)) {
+              absorbedMolIds.add(nearMol.id);
               absorbed++;
             }
           }
@@ -492,6 +496,9 @@ export class Simulation {
           this.protocells.push(cell);
         }
       }
+    }
+    if (absorbedMolIds.size > 0) {
+      this.molecules = this.molecules.filter(m => !absorbedMolIds.has(m.id));
     }
   }
 
@@ -571,7 +578,8 @@ export class Simulation {
       if (this.rng.next() < this.config.horizontalTransferRate) {
         for (const other of nearbyOrgs) {
           if (other.id === org.id || !other.alive) continue;
-          if (org.position.distanceTo(other.position) < org.phenotype.bodyRadius + other.phenotype.bodyRadius + 1) {
+          const threshold = org.phenotype.bodyRadius + other.phenotype.bodyRadius + 1;
+          if (org.position.distanceSqTo(other.position) < threshold * threshold) {
             org.genome.horizontalTransfer(other.genome, this.rng);
             break;
           }
@@ -588,7 +596,8 @@ export class Simulation {
       if ((org.actuatorOutputs[3] ?? 0) > 0.5) {
         for (const other of nearbyOrgs) {
           if (other.id === org.id || !other.alive) continue;
-          if (org.position.distanceTo(other.position) < org.phenotype.bodyRadius + other.phenotype.bodyRadius) {
+          const threshold = org.phenotype.bodyRadius + other.phenotype.bodyRadius;
+          if (org.position.distanceSqTo(other.position) < threshold * threshold) {
             if (org.phenotype.metabolismType === 'heterotrophy' || org.phenotype.mass > other.phenotype.mass * 1.5) {
               const energyGain = other.energy * 0.7;
               org.energy += energyGain;
@@ -632,121 +641,123 @@ export class Simulation {
   }
 
   private checkMilestones(): void {
-    // Stage 1 milestones
-    if (!this.milestoneSet.has('AMINO_ACID')) {
-      for (const mol of this.molecules) {
-        if (mol.hasCNChain() && mol.atoms.length >= 4) {
-          this.addMilestone('AMINO_ACID', `First complex organic: ${mol.getFormula()}`);
-          break;
+    // Reduce frequency of expensive milestone checks on molecule arrays
+    // Stage 1 milestones only need checking every 50 ticks
+    if (this.tick % 50 === 0) {
+      // Check all pending molecule-based milestones in a single pass
+      let needAminoAcid = !this.milestoneSet.has('AMINO_ACID');
+      let needFattyAcid = !this.milestoneSet.has('FATTY_ACID');
+      let needNucleotide = !this.milestoneSet.has('NUCLEOTIDE');
+      let needPolymer = !this.milestoneSet.has('POLYMER');
+
+      if (needAminoAcid || needFattyAcid || needNucleotide || needPolymer) {
+        for (const mol of this.molecules) {
+          if (needAminoAcid && mol.hasCNChain() && mol.atoms.length >= 4) {
+            this.addMilestone('AMINO_ACID', `First complex organic: ${mol.getFormula()}`);
+            needAminoAcid = false;
+          }
+          if (needFattyAcid && mol.hasLongCarbonChain() && mol.atoms.length >= 6) {
+            this.addMilestone('FATTY_ACID', `First fatty acid: ${mol.getFormula()}`);
+            needFattyAcid = false;
+          }
+          if (needNucleotide && mol.hasPhosphorusRing()) {
+            this.addMilestone('NUCLEOTIDE', `First nucleotide: ${mol.getFormula()}`);
+            needNucleotide = false;
+          }
+          if (needPolymer && mol.getChainLength() >= 5) {
+            this.addMilestone('POLYMER', `First polymer (chain length ${mol.getChainLength()})`);
+            needPolymer = false;
+          }
+          // Early exit if all molecule milestones found
+          if (!needAminoAcid && !needFattyAcid && !needNucleotide && !needPolymer) {
+            break;
+          }
         }
       }
     }
 
-    if (!this.milestoneSet.has('FATTY_ACID')) {
-      for (const mol of this.molecules) {
-        if (mol.hasLongCarbonChain() && mol.atoms.length >= 6) {
-          this.addMilestone('FATTY_ACID', `First fatty acid: ${mol.getFormula()}`);
-          break;
+    // Stage 2 milestones (protocell-based) — only check every 100 ticks
+    if (this.tick % 100 === 0 && this.protocells.length > 0) {
+      if (!this.milestoneSet.has('PROTOCELL')) {
+        const cell = this.protocells[0];
+        if (cell.interior.length >= 5) {
+          this.addMilestone('PROTOCELL', `First stable protocell with ${cell.interior.length} molecules`);
+        }
+      }
+
+      if (!this.milestoneSet.has('REPLICATOR')) {
+        for (const cell of this.protocells) {
+          if (cell.replicators.length > 0 && cell.replicators[0].copyCount > 0) {
+            this.addMilestone('REPLICATOR', `First self-copying polymer (length ${cell.replicators[0].polymer.length})`);
+            break;
+          }
+        }
+      }
+
+      if (!this.milestoneSet.has('PROTOCELL_DIVISION')) {
+        for (const cell of this.protocells) {
+          if (cell.parentId) {
+            this.addMilestone('PROTOCELL_DIVISION', 'First protocell division');
+            break;
+          }
+        }
+      }
+
+      if (!this.milestoneSet.has('METABOLISM')) {
+        for (const cell of this.protocells) {
+          if (cell.metabolismRate > 0) {
+            this.addMilestone('METABOLISM', `First metabolizing protocell (rate: ${cell.metabolismRate.toFixed(3)})`);
+            break;
+          }
         }
       }
     }
 
-    if (!this.milestoneSet.has('NUCLEOTIDE')) {
-      for (const mol of this.molecules) {
-        if (mol.hasPhosphorusRing()) {
-          this.addMilestone('NUCLEOTIDE', `First nucleotide: ${mol.getFormula()}`);
-          break;
+    // Stage 3 milestones (organism-based) — only check every 100 ticks
+    if (this.tick % 100 === 0) {
+      if (!this.milestoneSet.has('FIRST_ORGANISM') && this.organismManager.population > 0) {
+        this.addMilestone('FIRST_ORGANISM', 'First genome-bearing, metabolizing organism');
+      }
+
+      if (!this.milestoneSet.has('PREDATION')) {
+        for (const org of this.organismManager.organisms) {
+          if (org.killCount > 0) {
+            this.addMilestone('PREDATION', `First predator: species ${org.species}`);
+            break;
+          }
         }
       }
-    }
 
-    if (!this.milestoneSet.has('POLYMER')) {
-      for (const mol of this.molecules) {
-        if (mol.getChainLength() >= 5) {
-          this.addMilestone('POLYMER', `First polymer (chain length ${mol.getChainLength()})`);
-          break;
+      if (!this.milestoneSet.has('SPECIATION') && this.speciationSystem.getSpeciesCount() >= 2) {
+        this.addMilestone('SPECIATION', `${this.speciationSystem.getSpeciesCount()} species diverged`);
+      }
+
+      if (!this.milestoneSet.has('PHOTOSYNTHESIS')) {
+        for (const org of this.organismManager.organisms) {
+          if (org.phenotype.metabolismType === 'photosynthesis') {
+            this.addMilestone('PHOTOSYNTHESIS', 'First photosynthesizing organism');
+            break;
+          }
         }
       }
-    }
 
-    // Stage 2 milestones
-    if (!this.milestoneSet.has('PROTOCELL') && this.protocells.length > 0) {
-      const cell = this.protocells[0];
-      if (cell.interior.length >= 5) {
-        this.addMilestone('PROTOCELL', `First stable protocell with ${cell.interior.length} molecules`);
-      }
-    }
-
-    if (!this.milestoneSet.has('REPLICATOR')) {
-      for (const cell of this.protocells) {
-        if (cell.replicators.length > 0 && cell.replicators[0].copyCount > 0) {
-          this.addMilestone('REPLICATOR', `First self-copying polymer (length ${cell.replicators[0].polymer.length})`);
-          break;
+      if (!this.milestoneSet.has('NEURAL_HIDDEN')) {
+        for (const org of this.organismManager.organisms) {
+          if (org.genome.neuralGenome.nodeGenes.some(n => n.type === 'hidden')) {
+            this.addMilestone('NEURAL_HIDDEN', 'First organism with hidden neural node');
+            break;
+          }
         }
       }
-    }
 
-    if (!this.milestoneSet.has('PROTOCELL_DIVISION')) {
-      for (const cell of this.protocells) {
-        if (cell.parentId) {
-          this.addMilestone('PROTOCELL_DIVISION', 'First protocell division');
-          break;
-        }
+      // Stage 4
+      if (!this.milestoneSet.has('FOOD_WEB') && this.ecosystem.trophicLevelCount >= 3) {
+        this.addMilestone('FOOD_WEB', 'Three trophic levels established');
       }
-    }
 
-    if (!this.milestoneSet.has('METABOLISM')) {
-      for (const cell of this.protocells) {
-        if (cell.metabolismRate > 0) {
-          this.addMilestone('METABOLISM', `First metabolizing protocell (rate: ${cell.metabolismRate.toFixed(3)})`);
-          break;
-        }
+      if (!this.milestoneSet.has('ECOSYSTEM') && this.speciationSystem.getSpeciesCount() >= 5) {
+        this.addMilestone('ECOSYSTEM', `${this.speciationSystem.getSpeciesCount()} species coexisting`);
       }
-    }
-
-    // Stage 3 milestones
-    if (!this.milestoneSet.has('FIRST_ORGANISM') && this.organismManager.population > 0) {
-      this.addMilestone('FIRST_ORGANISM', 'First genome-bearing, metabolizing organism');
-    }
-
-    if (!this.milestoneSet.has('PREDATION')) {
-      for (const org of this.organismManager.organisms) {
-        if (org.killCount > 0) {
-          this.addMilestone('PREDATION', `First predator: species ${org.species}`);
-          break;
-        }
-      }
-    }
-
-    if (!this.milestoneSet.has('SPECIATION') && this.speciationSystem.getSpeciesCount() >= 2) {
-      this.addMilestone('SPECIATION', `${this.speciationSystem.getSpeciesCount()} species diverged`);
-    }
-
-    if (!this.milestoneSet.has('PHOTOSYNTHESIS')) {
-      for (const org of this.organismManager.organisms) {
-        if (org.phenotype.metabolismType === 'photosynthesis') {
-          this.addMilestone('PHOTOSYNTHESIS', 'First photosynthesizing organism');
-          break;
-        }
-      }
-    }
-
-    if (!this.milestoneSet.has('NEURAL_HIDDEN')) {
-      for (const org of this.organismManager.organisms) {
-        if (org.genome.neuralGenome.nodeGenes.some(n => n.type === 'hidden')) {
-          this.addMilestone('NEURAL_HIDDEN', 'First organism with hidden neural node');
-          break;
-        }
-      }
-    }
-
-    // Stage 4
-    if (!this.milestoneSet.has('FOOD_WEB') && this.ecosystem.trophicLevelCount >= 3) {
-      this.addMilestone('FOOD_WEB', 'Three trophic levels established');
-    }
-
-    if (!this.milestoneSet.has('ECOSYSTEM') && this.speciationSystem.getSpeciesCount() >= 5) {
-      this.addMilestone('ECOSYSTEM', `${this.speciationSystem.getSpeciesCount()} species coexisting`);
     }
   }
 
