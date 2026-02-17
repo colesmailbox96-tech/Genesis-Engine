@@ -129,7 +129,7 @@ export class Ecosystem {
   }
 
   /** Returns carrying capacity pressure (>1 means over capacity) for an organism's niche */
-  getNichePresure(org: Organism): number {
+  getNichePressure(org: Organism): number {
     const metToNiche: Record<string, string> = {
       chemosynthesis: 'vent_chemotroph',
       photosynthesis: 'surface_phototroph',

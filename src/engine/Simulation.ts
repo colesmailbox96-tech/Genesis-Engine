@@ -579,7 +579,7 @@ export class Simulation {
       }
 
       // Carrying capacity pressure — organisms in over-crowded niches lose energy faster
-      const nichePressure = this.ecosystem.getNichePresure(org);
+      const nichePressure = this.ecosystem.getNichePressure(org);
       if (nichePressure > 1) {
         org.energy -= (nichePressure - 1) * 0.005;
       }

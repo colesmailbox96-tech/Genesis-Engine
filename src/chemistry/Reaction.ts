@@ -144,11 +144,10 @@ export class ReactionSystem {
       // Wet/dry affects polymerization vs hydrolysis
       // Dry conditions favor condensation (polymerization/synthesis); wet favors hydrolysis
       if (rule.name === 'polymerization' || rule.name === 'synthesis' || rule.name === 'autocatalytic') {
-        if (wetness < 0.5) {
-          // Dry boosts condensation reactions
-        } else if (wetness > 0.8) {
-          // Very wet suppresses condensation
-          if (Math.random() > 0.5) continue;
+        if (wetness > 0.8) {
+          // Very wet suppresses condensation — use wetness as deterministic skip factor
+          const suppressFactor = (wetness - 0.8) * 5; // 0..1 range
+          if (suppressFactor > 0.5) continue;
         }
       }
       if (rule.name === 'hydrolysis') {
