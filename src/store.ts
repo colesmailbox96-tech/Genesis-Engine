@@ -30,6 +30,8 @@ export interface GameStore {
   speciesCount: number;
   moleculeCount: number;
   milestones: MilestoneEvent[];
+  fps: number;
+  tps: number;
 
   // Actions
   initSimulation: (seed?: number, config?: SimConfig) => void;
@@ -44,6 +46,7 @@ export interface GameStore {
   setShowStats: (show: boolean) => void;
   setVolume: (volume: number) => void;
   updateStats: () => void;
+  updatePerf: (fps: number, tps: number) => void;
   saveState: () => boolean;
   loadSavedState: () => SaveData | null;
   hasSavedState: () => boolean;
@@ -67,6 +70,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   population: 0,
   speciesCount: 0,
   moleculeCount: 0,
+  fps: 0,
+  tps: 0,
   milestones: [],
 
   initSimulation: (seed, config) => {
@@ -117,6 +122,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     set(newState);
   },
+
+  updatePerf: (fps, tps) => set({ fps, tps }),
 
   saveState: () => {
     const sim = get().simulation;

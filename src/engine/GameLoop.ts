@@ -1,3 +1,10 @@
+export interface PerformanceMetrics {
+  fps: number;
+  tps: number;       // ticks per second (actual)
+  frameTimeMs: number;
+  tickTimeMs: number;
+}
+
 export class GameLoop {
   private tickCallback: (dt: number) => void;
   private renderCallback: (interpolation: number) => void;
@@ -11,6 +18,14 @@ export class GameLoop {
   private _tick: number = 0;
   private frameBudgetMs: number = 16; // target ~60fps
   private adaptiveMaxTicks: number = 10;
+
+  // Performance tracking
+  private _frameCount: number = 0;
+  private _tickCount: number = 0;
+  private _lastPerfTime: number = 0;
+  private _lastTickDuration: number = 0;
+  private _lastFrameDelta: number = 16;
+  private _perfMetrics: PerformanceMetrics = { fps: 0, tps: 0, frameTimeMs: 0, tickTimeMs: 0 };
 
   constructor(
     tickRate: number,
@@ -27,6 +42,7 @@ export class GameLoop {
     if (this.running) return;
     this.running = true;
     this.lastTime = performance.now();
+    this._lastPerfTime = this.lastTime;
     this.loop(this.lastTime);
   }
 
@@ -50,6 +66,10 @@ export class GameLoop {
     return this.running;
   }
 
+  get performanceMetrics(): PerformanceMetrics {
+    return this._perfMetrics;
+  }
+
   // Run N ticks synchronously without rendering (for epoch skip)
   skipTicks(count: number): void {
     const dt = this.tickInterval / 1000;
@@ -65,6 +85,7 @@ export class GameLoop {
 
     let delta = time - this.lastTime;
     this.lastTime = time;
+    this._lastFrameDelta = delta;
 
     // Cap delta to prevent spiral of death
     if (delta > 250) delta = 250;
@@ -89,8 +110,26 @@ export class GameLoop {
       }
     }
 
+    this._lastTickDuration = performance.now() - tickStartTime;
+    this._tickCount += ticksThisFrame;
+    this._frameCount++;
+
+    // Update performance metrics every second
+    const elapsed = time - this._lastPerfTime;
+    if (elapsed >= 1000) {
+      this._perfMetrics = {
+        fps: Math.round(this._frameCount * 1000 / elapsed),
+        tps: Math.round(this._tickCount * 1000 / elapsed),
+        frameTimeMs: Math.round(this._lastFrameDelta * 10) / 10,
+        tickTimeMs: Math.round(this._lastTickDuration * 10) / 10,
+      };
+      this._frameCount = 0;
+      this._tickCount = 0;
+      this._lastPerfTime = time;
+    }
+
     // Adapt max ticks based on actual frame timing
-    const tickDuration = performance.now() - tickStartTime;
+    const tickDuration = this._lastTickDuration;
     if (tickDuration > this.frameBudgetMs * 0.8 && this.adaptiveMaxTicks > 2) {
       this.adaptiveMaxTicks = Math.max(2, this.adaptiveMaxTicks - 1);
     } else if (tickDuration < this.frameBudgetMs * 0.4 && this.adaptiveMaxTicks < 20) {
