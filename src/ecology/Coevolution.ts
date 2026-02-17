@@ -1,6 +1,5 @@
 import { Organism } from '../organisms/Organism';
-import { FoodWeb, FoodWebLink } from './FoodWeb';
-import { Random } from '../utils/Random';
+import { FoodWeb } from './FoodWeb';
 import { clamp } from '../utils/Math';
 
 /**
@@ -111,7 +110,7 @@ export class CoevolutionSystem {
    * arms races receive fitness bonuses for relevant traits.
    * Prey with higher defense survive better; predators with higher offense hunt better.
    */
-  applyCoevolutionaryPressure(organisms: Organism[], rng: Random): void {
+  applyCoevolutionaryPressure(organisms: Organism[]): void {
     const preySpecies = new Set(this.pairs.map(p => p.preySpecies));
     const predatorSpecies = new Set(this.pairs.map(p => p.predatorSpecies));
 

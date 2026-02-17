@@ -583,17 +583,25 @@ export class Simulation {
       // Think
       org.think();
 
+      // Social Learning: apply learned behavioral biases after think() so they
+      // durably influence behavior (profiles are updated periodically in check())
+      this.socialLearning.applyLearnedBias(org);
+
+      // Phenotypic Plasticity: adapt traits to local environment BEFORE act()
+      // so that speed and sensor modifiers take effect during this tick
+      const zone = this.environmentMap.getZoneAt(org.position.x, org.position.y);
+      const restorePlasticity = applyPlasticity(org, zone);
+
       // Act
       org.act(this.config.worldSize);
 
+      // Restore base phenotype values after act() to prevent compounding
+      restorePlasticity();
+
       // Metabolize
-      const zone = this.environmentMap.getZoneAt(org.position.x, org.position.y);
       const envEnergy = zone.energyDensity;
       const dayFactor = 0.5 + 0.5 * Math.sin((this.tick / this.config.dayNightPeriod) * Math.PI * 2);
       org.metabolize(envEnergy, zone.uvIntensity * dayFactor);
-
-      // Phenotypic Plasticity: adapt traits to local environment
-      applyPlasticity(org, zone);
 
       // Communication
       this.communicationSystem.emitSignal(org, this.tick);
@@ -699,7 +707,7 @@ export class Simulation {
     // Coevolution: track arms race dynamics (every 200 ticks)
     if (this.tick % 200 === 0 && organisms.length > 0) {
       const metrics = this.coevolutionSystem.update(organisms, this.foodWeb, this.tick);
-      this.coevolutionSystem.applyCoevolutionaryPressure(organisms, this.rng);
+      this.coevolutionSystem.applyCoevolutionaryPressure(organisms);
 
       if (!this.milestoneSet.has('ARMS_RACE') && metrics.escalationRate > 0.1) {
         this.addMilestone('ARMS_RACE', `Predator-prey arms race detected (escalation: ${metrics.escalationRate.toFixed(3)})`);
