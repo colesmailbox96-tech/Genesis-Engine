@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useGameStore } from '../store';
 
 export default function HUD() {
@@ -7,10 +7,16 @@ export default function HUD() {
   if (!simulation) return null;
 
   const orgs = simulation.organismManager.organisms;
-  const energyPct = population > 0
-    ? Math.round(orgs.reduce((s, o) => s + o.energy, 0) /
-        Math.max(1, orgs.reduce((s, o) => s + o.phenotype.energyCapacity, 0)) * 100)
-    : 0;
+  const energyPct = useMemo(() => {
+    if (population <= 0) return 0;
+    let totalEnergy = 0;
+    let totalCapacity = 0;
+    for (const o of orgs) {
+      totalEnergy += o.energy;
+      totalCapacity += o.phenotype.energyCapacity;
+    }
+    return Math.round(totalEnergy / Math.max(1, totalCapacity) * 100);
+  }, [orgs, population]);
 
   const fpsColor = fps >= 50 ? 'text-green-400' : fps >= 30 ? 'text-yellow-400' : 'text-red-400';
 

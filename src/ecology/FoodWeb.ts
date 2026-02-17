@@ -8,19 +8,22 @@ export interface FoodWebLink {
 
 export class FoodWeb {
   links: FoodWebLink[] = [];
+  /** Keyed by `"predatorSpecies_preySpecies"` for O(1) lookup */
+  private linkMap = new Map<string, FoodWebLink>();
 
   recordPredation(predator: Organism, prey: Organism): void {
-    const existing = this.links.find(
-      l => l.predatorSpecies === predator.species && l.preySpecies === prey.species
-    );
+    const key = `${predator.species}_${prey.species}`;
+    const existing = this.linkMap.get(key);
     if (existing) {
       existing.strength++;
     } else {
-      this.links.push({
+      const link: FoodWebLink = {
         predatorSpecies: predator.species,
         preySpecies: prey.species,
         strength: 1,
-      });
+      };
+      this.links.push(link);
+      this.linkMap.set(key, link);
     }
   }
 
