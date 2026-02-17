@@ -77,8 +77,9 @@ export class SpatialHash<T extends SpatialEntity> {
   }
 
   /** Reusable-buffer query that avoids allocating a new array each call.
-   *  The returned array is reused on the next call — copy it if you need to keep it. */
-  queryReuse(x: number, y: number, radius: number): readonly T[] {
+   *  WARNING: The returned array is shared and will be overwritten on the next
+   *  call to queryReuse(). Copy the contents if you need to retain them. */
+  queryReuse(x: number, y: number, radius: number): T[] {
     const buf = this._queryBuffer;
     buf.length = 0;
     const minCx = Math.floor((x - radius) / this.cellSize);

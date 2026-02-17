@@ -149,16 +149,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const save = SaveSystem.load();
     if (!save) return;
     const sim = new Simulation(DEFAULT_CONFIG, save.seed);
-    // Fast-forward to saved tick
-    for (let i = 0; i < save.tick; i++) {
-      sim.update();
-    }
-    set({
-      simulation: sim,
-      seed: save.seed,
-      showWelcome: false,
-      tick: save.tick,
-    });
-    get().updateStats();
+
+    // Fast-forward in batches to avoid blocking the UI thread
+    const BATCH_SIZE = 500;
+    let i = 0;
+
+    const processBatch = () => {
+      const end = Math.min(i + BATCH_SIZE, save.tick);
+      while (i < end) {
+        sim.update();
+        i++;
+      }
+
+      if (i < save.tick) {
+        // Yield to browser, then continue
+        setTimeout(processBatch, 0);
+      } else {
+        // Restoration complete
+        set({
+          simulation: sim,
+          seed: save.seed,
+          showWelcome: false,
+          tick: save.tick,
+        });
+        get().updateStats();
+      }
+    };
+
+    processBatch();
   },
 }));
