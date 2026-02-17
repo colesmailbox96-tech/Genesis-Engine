@@ -262,12 +262,23 @@ export class Simulation {
       for (const other of nearby) {
         if (other.id === mol.id || toRemove.has(other.id) || toRemove.has(mol.id)) continue;
 
-        const rule = this.reactionSystem.checkReaction(mol, other, zone.temperature);
+        const rule = this.reactionSystem.checkReaction(mol, other, zone.temperature, undefined, zone.wetness);
         if (rule && this.rng.next() < rule.probability * zone.temperature) {
           const products = this.reactionSystem.executeReaction(mol, other, rule, this.rng);
           if (products.length > 0) {
             toRemove.add(mol.id);
             toRemove.add(other.id);
+            for (const product of products) {
+              // Track formation pathway
+              product.formation = {
+                parentFormulas: [mol.getFormula(), other.getFormula()],
+                reactionType: rule.name,
+                zoneName: zone.type,
+                catalystFormula: null,
+                tick: this.tick,
+              };
+              product.role = product.inferRole();
+            }
             newMolecules.push(...products);
 
             // Add to chemical field
@@ -276,10 +287,12 @@ export class Simulation {
         }
       }
 
-      // Decay
-      if (this.rng.next() < this.config.moleculeDecayRate && mol.atoms.length > 2) {
+      // Decay based on half-life
+      const decayProb = 1 - Math.pow(0.5, 1 / Math.max(1, mol.halfLife));
+      if (this.rng.next() < decayProb && mol.atoms.length > 2) {
         if (mol.bonds.length > 0) {
           mol.bonds.pop();
+          mol.halfLife = mol.estimateHalfLife();
           if (mol.bonds.length === 0 && mol.atoms.length > 1) {
             toRemove.add(mol.id);
             const mid = Math.floor(mol.atoms.length / 2);
@@ -288,6 +301,18 @@ export class Simulation {
             newMolecules.push(mol1, mol2);
           }
         }
+      }
+
+      // Polymer hydrolysis in wet conditions
+      if (zone.wetness > 0.7 && mol.getChainLength() >= 4 && this.rng.next() < this.config.polymerHydrolysisRate * zone.wetness) {
+        if (mol.bonds.length > 0) {
+          mol.bonds.pop();
+        }
+      }
+
+      // Toxin accumulation from reactions in zone
+      if (zone.toxinLevel > 0.5 && mol.energy > 0) {
+        mol.energy -= zone.toxinLevel * 0.001;
       }
     }
 
@@ -335,6 +360,43 @@ export class Simulation {
       }
 
       this.chemicalField.addSource(x, y, 'organic', 0.5);
+    }
+
+    // Electrical storms — create redox-enriched molecules and energy bursts
+    if (this.rng.next() < this.config.electricalStormProbability) {
+      const x = this.rng.range(0, this.config.worldSize);
+      const y = this.rng.range(0, this.config.worldSize);
+      for (let i = 0; i < 3; i++) {
+        const pos = new Vector2(x + this.rng.gaussian(0, 8), y + this.rng.gaussian(0, 8));
+        const mol = Molecule.createRandom(this.rng.pick([Element.N, Element.O, Element.S]), pos, this.rng);
+        mol.energy += 50;
+        this.molecules.push(mol);
+      }
+      // Boost redox potential in nearby zone
+      const zone = this.environmentMap.getZoneAt(x, y);
+      zone.redoxPotential = Math.min(1, zone.redoxPotential + 0.3);
+    }
+
+    // UV bursts — damage fragile molecules in exposed zones
+    if (this.rng.next() < this.config.uvBurstProbability) {
+      for (const mol of this.molecules) {
+        const zone = this.environmentMap.getZoneAt(mol.position.x, mol.position.y);
+        if (zone.uvIntensity > 0.5 && mol.getChainLength() >= 3) {
+          if (mol.bonds.length > 0 && this.rng.next() < 0.3) {
+            mol.bonds.pop();
+          }
+        }
+      }
+    }
+
+    // Heat spikes — damage molecules in volcanic zones
+    if (this.rng.next() < this.config.heatSpikeProbability) {
+      for (const mol of this.molecules) {
+        const zone = this.environmentMap.getZoneAt(mol.position.x, mol.position.y);
+        if (zone.temperature > 0.7 && this.rng.next() < 0.2) {
+          mol.energy *= 0.5;
+        }
+      }
     }
 
     // Energy sources emit minerals
@@ -504,6 +566,23 @@ export class Simulation {
 
       // Communication
       this.communicationSystem.emitSignal(org, this.tick);
+
+      // Horizontal gene transfer on collision
+      if (this.rng.next() < this.config.horizontalTransferRate) {
+        for (const other of nearbyOrgs) {
+          if (other.id === org.id || !other.alive) continue;
+          if (org.position.distanceTo(other.position) < org.phenotype.bodyRadius + other.phenotype.bodyRadius + 1) {
+            org.genome.horizontalTransfer(other.genome, this.rng);
+            break;
+          }
+        }
+      }
+
+      // Carrying capacity pressure — organisms in over-crowded niches lose energy faster
+      const nichePressure = this.ecosystem.getNichePresure(org);
+      if (nichePressure > 1) {
+        org.energy -= (nichePressure - 1) * 0.005;
+      }
 
       // Predation check
       if ((org.actuatorOutputs[3] ?? 0) > 0.5) {
@@ -688,6 +767,14 @@ export class Simulation {
       ? organisms.reduce((s, o) => s + o.genome.neuralGenome.nodeGenes.length, 0) / organisms.length
       : 0;
 
+    // Average chain length of all molecules
+    const avgChainLength = this.molecules.length > 0
+      ? this.molecules.reduce((s, m) => s + m.getChainLength(), 0) / this.molecules.length
+      : 0;
+
+    // Energy flux (total energy from all sources)
+    const energyFlux = this.energySources.reduce((s, src) => s + src.power, 0);
+
     this.metricsCollector.collect({
       tick: this.tick,
       population: organisms.length,
@@ -697,6 +784,10 @@ export class Simulation {
       avgNeuralNodes,
       births: this.organismManager.totalBorn,
       deaths: this.organismManager.totalDied,
+      diversityIndex: this.ecosystem.diversityIndex,
+      avgChainLength,
+      energyFlux,
+      extinctionRate: this.ecosystem.extinctionRate,
     });
   }
 

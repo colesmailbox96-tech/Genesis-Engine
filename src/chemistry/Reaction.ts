@@ -19,6 +19,7 @@ export interface ReactionRule {
   catalyticReduction: number;
   temperatureRange: [number, number];
   probability: number;
+  autocatalytic?: boolean;
 }
 
 function matchesPattern(mol: Molecule, pattern: MoleculePattern): boolean {
@@ -85,6 +86,27 @@ const CORE_RULES: ReactionRule[] = [
     temperatureRange: [0, 800],
     probability: 0.2,
   },
+  {
+    name: 'autocatalytic',
+    reactants: [{ minAtoms: 3, minChainLength: 2 }, { minAtoms: 2 }],
+    products: [{ minAtoms: 4 }],
+    activationEnergy: 4,
+    energyDelta: -2,
+    catalyticReduction: 0.8,
+    temperatureRange: [50, 500],
+    probability: 0.1,
+    autocatalytic: true,
+  },
+  {
+    name: 'hydrolysis',
+    reactants: [{ minAtoms: 4, minChainLength: 3 }, { minAtoms: 1 }],
+    products: [{ minAtoms: 1 }, { minAtoms: 1 }],
+    activationEnergy: 6,
+    energyDelta: 3,
+    catalyticReduction: 0.3,
+    temperatureRange: [0, 400],
+    probability: 0.08,
+  },
 ];
 
 export class ReactionSystem {
@@ -103,6 +125,7 @@ export class ReactionSystem {
     mol2: Molecule,
     temperature: number,
     catalyst?: Molecule,
+    wetness: number = 1.0,
   ): ReactionRule | null {
     for (const rule of this.rules) {
       // Check temperature range
@@ -118,11 +141,35 @@ export class ReactionSystem {
       // If rule requires catalyst, check it
       if (rule.catalystPattern && (!catalyst || !matchesPattern(catalyst, rule.catalystPattern))) continue;
 
+      // Wet/dry affects polymerization vs hydrolysis
+      // Dry conditions favor condensation (polymerization/synthesis); wet favors hydrolysis
+      if (rule.name === 'polymerization' || rule.name === 'synthesis' || rule.name === 'autocatalytic') {
+        if (wetness < 0.5) {
+          // Dry boosts condensation reactions
+        } else if (wetness > 0.8) {
+          // Very wet suppresses condensation
+          if (Math.random() > 0.5) continue;
+        }
+      }
+      if (rule.name === 'hydrolysis') {
+        if (wetness < 0.4) continue; // Dry suppresses hydrolysis
+      }
+
       // Check activation energy (catalyst reduces it)
       let effectiveActivation = rule.activationEnergy;
       if (catalyst && rule.catalystPattern) {
         effectiveActivation *= (1 - rule.catalyticReduction);
       }
+
+      // Autocatalytic reactions: product similarity reduces activation further
+      if (rule.autocatalytic) {
+        const formula1 = mol1.getFormula();
+        const formula2 = mol2.getFormula();
+        if (formula1 === formula2) {
+          effectiveActivation *= 0.3; // Strong self-catalysis
+        }
+      }
+
       const availableEnergy = mol1.energy + mol2.energy + temperature * 0.1;
       if (availableEnergy < effectiveActivation) continue;
 

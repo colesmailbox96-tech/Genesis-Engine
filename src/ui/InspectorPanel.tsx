@@ -67,19 +67,42 @@ function OrganismInspector({ org }: { org: Organism }) {
 }
 
 function MoleculeInspector({ mol }: { mol: Molecule }) {
+  const role = mol.role !== 'unknown' ? mol.role : mol.inferRole();
+  const roleColors: Record<string, string> = {
+    food: 'text-green-400',
+    waste: 'text-gray-500',
+    catalyst: 'text-amber-400',
+    membrane: 'text-blue-400',
+    genome_segment: 'text-purple-400',
+    toxin: 'text-red-400',
+    unknown: 'text-gray-400',
+  };
+
   return (
     <div className="space-y-2 text-gray-300">
       <div className="text-white">Molecule #{mol.id}</div>
       <div>Formula: <span className="text-cyan-400">{mol.getFormula()}</span></div>
+      <div>Role: <span className={roleColors[role] ?? 'text-gray-400'}>{role}</span></div>
       <div>Mass: {mol.mass.toFixed(0)}</div>
       <div>Energy: {mol.energy.toFixed(3)}</div>
       <div>Age: {mol.age.toLocaleString()} ticks</div>
+      <div>Half-life: ~{mol.halfLife.toLocaleString()} ticks</div>
       <div>Atoms: {mol.atoms.length}</div>
       <div>Bonds: {mol.bonds.length}</div>
       <div>Polarity: {mol.polarity.toFixed(2)}</div>
       <div>Chain: {mol.getChainLength()}</div>
       {mol.catalyticSites.length > 0 && (
         <div className="text-amber-400">Catalytic: {mol.catalyticSites.length} sites</div>
+      )}
+      {mol.formation && (
+        <div className="border-t border-gray-700 pt-2 mt-2">
+          <div className="text-cyan-400 text-[10px]">Formation Pathway</div>
+          <div>From: {mol.formation.parentFormulas.join(' + ')}</div>
+          <div>Reaction: {mol.formation.reactionType}</div>
+          <div>Zone: {mol.formation.zoneName}</div>
+          {mol.formation.catalystFormula && <div>Catalyst: {mol.formation.catalystFormula}</div>}
+          <div>At tick: {mol.formation.tick.toLocaleString()}</div>
+        </div>
       )}
     </div>
   );
@@ -94,6 +117,8 @@ function ProtocellInspector({ cell }: { cell: Protocell }) {
       <div>Interior: {cell.interior.length} molecules</div>
       <div>Membrane lipids: {cell.membrane.lipidCount}</div>
       <div>Integrity: {(cell.integrity * 100).toFixed(0)}%</div>
+      <div>Osmotic pressure: {(cell.membrane.osmoticPressure * 100).toFixed(0)}%</div>
+      <div>Capacity: {cell.interior.length}/{cell.membrane.maxCapacity}</div>
       <div>Energy: {cell.energy.toFixed(2)}</div>
       <div>Replicators: {cell.replicators.length}</div>
       <div>Complexity: {cell.complexityScore}</div>

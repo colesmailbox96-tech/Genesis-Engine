@@ -7,6 +7,10 @@ export interface MetricsSnapshot {
   avgNeuralNodes: number;
   births: number;
   deaths: number;
+  diversityIndex: number;
+  avgChainLength: number;
+  energyFlux: number;
+  extinctionRate: number;
 }
 
 export class MetricsCollector {
@@ -41,9 +45,9 @@ export class MetricsCollector {
   }
 
   toCSV(): string {
-    const headers = 'tick,population,speciesCount,totalEnergy,avgGenomeLength,avgNeuralNodes,births,deaths';
+    const headers = 'tick,population,speciesCount,totalEnergy,avgGenomeLength,avgNeuralNodes,births,deaths,diversityIndex,avgChainLength,energyFlux,extinctionRate';
     const rows = this.snapshots.map(s =>
-      `${s.tick},${s.population},${s.speciesCount},${s.totalEnergy.toFixed(2)},${s.avgGenomeLength.toFixed(1)},${s.avgNeuralNodes.toFixed(1)},${s.births},${s.deaths}`
+      `${s.tick},${s.population},${s.speciesCount},${s.totalEnergy.toFixed(2)},${s.avgGenomeLength.toFixed(1)},${s.avgNeuralNodes.toFixed(1)},${s.births},${s.deaths},${s.diversityIndex.toFixed(3)},${s.avgChainLength.toFixed(1)},${s.energyFlux.toFixed(2)},${s.extinctionRate}`
     );
     return [headers, ...rows].join('\n');
   }

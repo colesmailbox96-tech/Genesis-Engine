@@ -42,6 +42,15 @@ export interface SimConfig {
   volcanicEruptionRate: number;
   asteroidImpactRate: number;
   o2ToxicityThreshold: number;
+  wetDryCyclePeriod: number;
+  redoxGradientStrength: number;
+  electricalStormProbability: number;
+  polymerHydrolysisRate: number;
+  toxinAccumulationRate: number;
+  uvBurstProbability: number;
+  heatSpikeProbability: number;
+  autocatalysisBoost: number;
+  horizontalTransferRate: number;
   backgroundColor: string;
   bloomThreshold: number;
   bloomIntensity: number;
@@ -97,6 +106,15 @@ export const DEFAULT_CONFIG: SimConfig = {
   volcanicEruptionRate: 0.000001,
   asteroidImpactRate: 0.0000001,
   o2ToxicityThreshold: 0.3,
+  wetDryCyclePeriod: 5000,
+  redoxGradientStrength: 0.5,
+  electricalStormProbability: 0.0005,
+  polymerHydrolysisRate: 0.0002,
+  toxinAccumulationRate: 0.0001,
+  uvBurstProbability: 0.00005,
+  heatSpikeProbability: 0.00005,
+  autocatalysisBoost: 2.0,
+  horizontalTransferRate: 0.001,
   backgroundColor: '#0a0a12',
   bloomThreshold: 0.6,
   bloomIntensity: 0.4,
