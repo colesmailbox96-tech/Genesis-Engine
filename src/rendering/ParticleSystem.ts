@@ -32,14 +32,19 @@ export class ParticleSystem {
   }
 
   update(): void {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
+    let i = 0;
+    while (i < this.particles.length) {
       const p = this.particles[i];
       p.position = p.position.add(p.velocity);
       p.velocity = p.velocity.mul(0.98);
       p.life--;
       p.alpha = Math.max(0, p.life / p.maxLife);
       if (p.life <= 0) {
-        this.particles.splice(i, 1);
+        // Swap with last element and pop for O(1) removal
+        this.particles[i] = this.particles[this.particles.length - 1];
+        this.particles.pop();
+      } else {
+        i++;
       }
     }
   }

@@ -30,9 +30,9 @@ export class MetricsCollector {
     this.snapshots.push(snapshot);
     this.lastTick = snapshot.tick;
 
-    // Keep last 5000 snapshots
+    // Keep last 5000 snapshots — splice front instead of slice+reassign
     if (this.snapshots.length > 5000) {
-      this.snapshots = this.snapshots.slice(-2500);
+      this.snapshots.splice(0, this.snapshots.length - 2500);
     }
   }
 

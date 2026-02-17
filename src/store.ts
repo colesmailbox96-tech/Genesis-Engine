@@ -98,12 +98,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const sim = get().simulation;
     if (!sim) return;
     const stats = sim.getStats();
-    set({
+    const currentMilestones = get().milestones;
+    const newState: Partial<GameStore> = {
       tick: stats.tick,
       population: stats.population,
       speciesCount: stats.speciesCount,
       moleculeCount: stats.moleculeCount,
-      milestones: [...sim.milestones],
-    });
+    };
+    // Only create new milestones array if it has changed
+    if (sim.milestones.length !== currentMilestones.length) {
+      newState.milestones = [...sim.milestones];
+    }
+    set(newState);
   },
 }));

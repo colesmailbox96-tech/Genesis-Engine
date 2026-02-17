@@ -9,6 +9,8 @@ export class GameLoop {
   private speedMultiplier: number = 1;
   private animFrameId: number = 0;
   private _tick: number = 0;
+  private frameBudgetMs: number = 16; // target ~60fps
+  private adaptiveMaxTicks: number = 10;
 
   constructor(
     tickRate: number,
@@ -71,13 +73,28 @@ export class GameLoop {
 
     const dt = this.tickInterval / 1000;
     let ticksThisFrame = 0;
-    const maxTicksPerFrame = Math.max(10, this.speedMultiplier * 2);
+    const maxTicksPerFrame = Math.min(this.adaptiveMaxTicks, Math.max(10, this.speedMultiplier * 2));
+
+    const tickStartTime = performance.now();
 
     while (this.accumulator >= this.tickInterval && ticksThisFrame < maxTicksPerFrame) {
       this.tickCallback(dt);
       this._tick++;
       this.accumulator -= this.tickInterval;
       ticksThisFrame++;
+
+      // Adaptive: if ticks are taking too long, break early to maintain frame rate
+      if (ticksThisFrame > 1 && performance.now() - tickStartTime > this.frameBudgetMs * 0.7) {
+        break;
+      }
+    }
+
+    // Adapt max ticks based on actual frame timing
+    const tickDuration = performance.now() - tickStartTime;
+    if (tickDuration > this.frameBudgetMs * 0.8 && this.adaptiveMaxTicks > 2) {
+      this.adaptiveMaxTicks = Math.max(2, this.adaptiveMaxTicks - 1);
+    } else if (tickDuration < this.frameBudgetMs * 0.4 && this.adaptiveMaxTicks < 20) {
+      this.adaptiveMaxTicks = Math.min(20, this.adaptiveMaxTicks + 1);
     }
 
     // If still behind, discard accumulated time

@@ -5,12 +5,14 @@ export class ChemicalField {
   private readonly worldSize: number;
   private readonly cellSize: number;
   readonly concentrations: Map<string, Float32Array>;
+  private scratchBuffer: Float32Array;
 
   constructor(worldSize: number = 512, gridSize: number = 64) {
     this.worldSize = worldSize;
     this.gridSize = gridSize;
     this.cellSize = worldSize / gridSize;
     this.concentrations = new Map();
+    this.scratchBuffer = new Float32Array(gridSize * gridSize);
   }
 
   private ensureType(type: string): Float32Array {
@@ -62,8 +64,9 @@ export class ChemicalField {
   }
 
   diffuse(rate: number): void {
+    const next = this.scratchBuffer;
     for (const [, grid] of this.concentrations) {
-      const next = new Float32Array(grid.length);
+      next.fill(0);
       for (let gy = 0; gy < this.gridSize; gy++) {
         for (let gx = 0; gx < this.gridSize; gx++) {
           const i = this.idx(gx, gy);
