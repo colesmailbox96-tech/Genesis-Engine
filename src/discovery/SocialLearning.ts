@@ -31,6 +31,8 @@ export class SocialLearningTracker {
   private readonly maxEvents = 500;
   private readonly proximityRadius = 8.0;
   private readonly similarityThreshold = 0.7;
+  /** Minimum fitness advantage ratio for an organism to be considered a "teacher" */
+  private readonly fitnessAdvantageThreshold = 1.3;
 
   /**
    * Record current behavioral profiles for all organisms.
@@ -76,7 +78,7 @@ export class SocialLearningTracker {
         // Must be from different lineage (non-kin)
         if (other.parentId === learner.parentId && learner.parentId !== '') continue;
 
-        if (other.energy > bestFitness * 1.3) {
+        if (other.energy > bestFitness * this.fitnessAdvantageThreshold) {
           bestTeacher = other;
           bestFitness = other.energy;
         }

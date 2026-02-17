@@ -70,6 +70,8 @@ export function computePlasticityModifiers(
   return mods;
 }
 
+const PLASTICITY_ENERGY_SCALE = 0.01;
+
 /**
  * Apply plasticity modifiers to an organism's effective traits for this tick.
  * Modifies the organism's energy metabolism and movement without altering genome.
@@ -84,7 +86,7 @@ export function applyPlasticity(
   // The metabolize() call in the main loop uses phenotype.metabolicEfficiency directly,
   // so we apply the modifier to the energy gain via a small bonus/penalty
   const efficiencyDelta = (mods.metabolicEfficiencyMod - 1) * org.phenotype.metabolicEfficiency;
-  org.energy += efficiencyDelta * 0.01; // small per-tick effect
+  org.energy += efficiencyDelta * PLASTICITY_ENERGY_SCALE;
 
   // Speed is handled through velocity damping
   if (mods.speedMod < 1) {

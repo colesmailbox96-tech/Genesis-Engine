@@ -61,12 +61,12 @@ export class PopulationGenetics {
       }
     }
 
-    // Compute allele frequencies
+    // Compute allele frequencies (proportion of this allele among all active genes)
     const alleleFrequencies: AlleleFrequency[] = [];
     let fixationEvents = 0;
 
     for (const [geneType, count] of geneCounts) {
-      const freq = count / organisms.length;
+      const freq = totalGenes > 0 ? count / totalGenes : 0;
       const prevFreq = this.previousFrequencies.get(geneType) ?? freq;
       const drift = freq - prevFreq;
 

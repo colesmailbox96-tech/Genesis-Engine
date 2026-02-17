@@ -33,6 +33,8 @@ export class CoevolutionSystem {
   pairs: CoevolutionaryPair[] = [];
   private previousMetrics: ArmsRaceMetrics | null = null;
   private readonly maxPairs = 200;
+  /** Minimum predation events before tracking a coevolutionary relationship */
+  private readonly minEstablishedPredation = 2;
 
   /**
    * Update coevolutionary relationships based on current food web data.
@@ -54,7 +56,7 @@ export class CoevolutionSystem {
 
     // Update coevolutionary pairs from food web links
     for (const link of foodWeb.links) {
-      if (link.strength < 2) continue; // only track established predation
+      if (link.strength < this.minEstablishedPredation) continue;
 
       let pair = this.pairs.find(
         p => p.predatorSpecies === link.predatorSpecies && p.preySpecies === link.preySpecies

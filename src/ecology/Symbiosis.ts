@@ -17,6 +17,8 @@ export class SymbiosisSystem {
   private readonly proximityThreshold = 3.0;
   private readonly minTicksForBond = 50;
   private readonly maxBonds = 500;
+  /** Extra distance buffer to prevent overly tight bonding requirements */
+  private readonly proximityBuffer = 1;
 
   /**
    * Detect and update symbiotic relationships between nearby organisms.
@@ -57,7 +59,7 @@ export class SymbiosisSystem {
         if (bonded.has(key)) continue;
 
         const distSq = org.position.distanceSqTo(other.position);
-        const threshold = (org.phenotype.bodyRadius + other.phenotype.bodyRadius + 1);
+        const threshold = (org.phenotype.bodyRadius + other.phenotype.bodyRadius + this.proximityBuffer);
         if (distSq > threshold * threshold) continue;
 
         // Determine symbiosis type from metabolic compatibility

@@ -32,7 +32,7 @@ function OrganismInspector({ org }: { org: Organism }) {
   const connCount = org.genome.neuralGenome.connectionGenes.filter(c => c.enabled).length;
   const energyPct = Math.round((org.energy / org.phenotype.energyCapacity) * 100);
   const intPct = Math.round(org.integrity * 100);
-  const bonds = simulation?.symbiosisSystem.getBondsForOrganism(org.id) ?? [];
+  const bonds = simulation?.symbiosisSystem?.getBondsForOrganism(org.id) ?? [];
 
   return (
     <div className="space-y-2 text-gray-300">

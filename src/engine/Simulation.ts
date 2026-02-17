@@ -671,7 +671,7 @@ export class Simulation {
         this.cultureTracker.record({
           type: DiscoveryType.TEACHING,
           organismId: learningEvent.teacherId,
-          species: 0,
+          species: organisms.find(o => o.id === learningEvent.teacherId)?.species ?? 0,
           tick: this.tick,
           description: `Behavior "${learningEvent.behavior}" learned`,
           evidence: [learningEvent.learnerId, learningEvent.teacherId],
