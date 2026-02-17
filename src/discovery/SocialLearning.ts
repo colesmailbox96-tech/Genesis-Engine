@@ -94,7 +94,7 @@ export class SocialLearningTracker {
         if (other.id === learner.id || !other.alive) continue;
         // Must be from different lineage (non-kin): exclude siblings, parent, and children
         if (other.parentId === learner.parentId && learner.parentId !== '') continue;
-        if (other.id === learner.parentId || learner.id === other.parentId) continue;
+        if (other.id === learner.parentId || other.parentId === learner.id) continue;
 
         // Teacher must have meaningfully higher fitness
         const teacherProfile = this.behaviorProfiles.get(other.id);
