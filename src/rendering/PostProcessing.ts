@@ -21,7 +21,6 @@ export class PostProcessing {
   }
 
   private scanLinePattern: CanvasPattern | null = null;
-  private scanLineCanvas: HTMLCanvasElement | null = null;
   private cachedScanLineOpacity: number = -1;
 
   scanLines(ctx: CanvasRenderingContext2D, width: number, height: number, opacity: number): void {
@@ -29,9 +28,7 @@ export class PostProcessing {
 
     // Create/update cached scan line pattern
     if (!this.scanLinePattern || this.cachedScanLineOpacity !== opacity) {
-      const patternCanvas = typeof OffscreenCanvas !== 'undefined'
-        ? new OffscreenCanvas(1, 3) as unknown as HTMLCanvasElement
-        : document.createElement('canvas');
+      const patternCanvas = document.createElement('canvas');
       patternCanvas.width = 1;
       patternCanvas.height = 3;
       const pCtx = patternCanvas.getContext('2d')!;

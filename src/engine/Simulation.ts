@@ -645,28 +645,31 @@ export class Simulation {
     // Stage 1 milestones only need checking every 50 ticks
     if (this.tick % 50 === 0) {
       // Check all pending molecule-based milestones in a single pass
-      const needAminoAcid = !this.milestoneSet.has('AMINO_ACID');
-      const needFattyAcid = !this.milestoneSet.has('FATTY_ACID');
-      const needNucleotide = !this.milestoneSet.has('NUCLEOTIDE');
-      const needPolymer = !this.milestoneSet.has('POLYMER');
+      let needAminoAcid = !this.milestoneSet.has('AMINO_ACID');
+      let needFattyAcid = !this.milestoneSet.has('FATTY_ACID');
+      let needNucleotide = !this.milestoneSet.has('NUCLEOTIDE');
+      let needPolymer = !this.milestoneSet.has('POLYMER');
 
       if (needAminoAcid || needFattyAcid || needNucleotide || needPolymer) {
         for (const mol of this.molecules) {
-          if (needAminoAcid && !this.milestoneSet.has('AMINO_ACID') && mol.hasCNChain() && mol.atoms.length >= 4) {
+          if (needAminoAcid && mol.hasCNChain() && mol.atoms.length >= 4) {
             this.addMilestone('AMINO_ACID', `First complex organic: ${mol.getFormula()}`);
+            needAminoAcid = false;
           }
-          if (needFattyAcid && !this.milestoneSet.has('FATTY_ACID') && mol.hasLongCarbonChain() && mol.atoms.length >= 6) {
+          if (needFattyAcid && mol.hasLongCarbonChain() && mol.atoms.length >= 6) {
             this.addMilestone('FATTY_ACID', `First fatty acid: ${mol.getFormula()}`);
+            needFattyAcid = false;
           }
-          if (needNucleotide && !this.milestoneSet.has('NUCLEOTIDE') && mol.hasPhosphorusRing()) {
+          if (needNucleotide && mol.hasPhosphorusRing()) {
             this.addMilestone('NUCLEOTIDE', `First nucleotide: ${mol.getFormula()}`);
+            needNucleotide = false;
           }
-          if (needPolymer && !this.milestoneSet.has('POLYMER') && mol.getChainLength() >= 5) {
+          if (needPolymer && mol.getChainLength() >= 5) {
             this.addMilestone('POLYMER', `First polymer (chain length ${mol.getChainLength()})`);
+            needPolymer = false;
           }
           // Early exit if all molecule milestones found
-          if (this.milestoneSet.has('AMINO_ACID') && this.milestoneSet.has('FATTY_ACID') &&
-              this.milestoneSet.has('NUCLEOTIDE') && this.milestoneSet.has('POLYMER')) {
+          if (!needAminoAcid && !needFattyAcid && !needNucleotide && !needPolymer) {
             break;
           }
         }
