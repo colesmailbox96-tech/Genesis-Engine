@@ -24,6 +24,15 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showStats, setShowStats]);
 
+  // Auto-save on page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      useGameStore.getState().saveState();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   return (
     <div className="w-full h-full relative bg-[#0a0a12] overflow-hidden">
       <WelcomeScreen />

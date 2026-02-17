@@ -4,6 +4,7 @@ import { SimConfig, DEFAULT_CONFIG } from './engine/Config';
 import { Organism } from './organisms/Organism';
 import { Molecule } from './chemistry/Molecule';
 import { Protocell } from './proto/Protocell';
+import { SaveSystem, SaveData } from './data/SaveSystem';
 
 export interface GameStore {
   // Simulation
@@ -43,6 +44,11 @@ export interface GameStore {
   setShowStats: (show: boolean) => void;
   setVolume: (volume: number) => void;
   updateStats: () => void;
+  saveState: () => boolean;
+  loadSavedState: () => SaveData | null;
+  hasSavedState: () => boolean;
+  clearSavedState: () => void;
+  restoreFromSave: () => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -110,5 +116,42 @@ export const useGameStore = create<GameStore>((set, get) => ({
       newState.milestones = [...sim.milestones];
     }
     set(newState);
+  },
+
+  saveState: () => {
+    const sim = get().simulation;
+    if (!sim) return false;
+    const stats = sim.getStats();
+    return SaveSystem.save({
+      seed: get().seed,
+      tick: stats.tick,
+      milestoneCount: stats.milestoneCount,
+      population: stats.population,
+      speciesCount: stats.speciesCount,
+      moleculeCount: stats.moleculeCount,
+    });
+  },
+
+  loadSavedState: () => SaveSystem.load(),
+
+  hasSavedState: () => SaveSystem.hasSave(),
+
+  clearSavedState: () => SaveSystem.clear(),
+
+  restoreFromSave: () => {
+    const save = SaveSystem.load();
+    if (!save) return;
+    const sim = new Simulation(DEFAULT_CONFIG, save.seed);
+    // Fast-forward to saved tick
+    for (let i = 0; i < save.tick; i++) {
+      sim.update();
+    }
+    set({
+      simulation: sim,
+      seed: save.seed,
+      showWelcome: false,
+      tick: save.tick,
+    });
+    get().updateStats();
   },
 }));
