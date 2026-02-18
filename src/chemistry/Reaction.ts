@@ -264,8 +264,9 @@ export class ReactionSystem {
           : 'single';
 
       bonds.push({ atomA: a1, atomB: a2 + offset, strength: 1 - diff * 0.5, type: bondType, order: bondOrder });
-      atoms[a1].bondCount++;
-      atoms[a2 + offset].bondCount++;
+      const bondSitesUsed = bondOrder === 'double' ? 2 : 1;
+      atoms[a1].bondCount += bondSitesUsed;
+      atoms[a2 + offset].bondCount += bondSitesUsed;
     }
 
     const product = new Molecule(atoms, bonds, position, Math.max(0, totalEnergy));
