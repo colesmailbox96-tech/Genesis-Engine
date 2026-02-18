@@ -88,7 +88,11 @@ function OrganismInspector({ org }: { org: Organism }) {
         <SelectionBar label="Replication Rate" value={Math.min(1, org.offspring / Math.max(1, org.age / 1000))} color="green" />
         <SelectionBar label="Survival (Energy)" value={energyPct / 100} color="yellow" />
         <SelectionBar label="Integrity" value={intPct / 100} color="blue" />
-        <SelectionBar label="Niche Fitness" value={Math.min(1, org.killCount / 10 + org.offspring / 20)} color="purple" />
+        <SelectionBar
+          label="Niche Fitness"
+          value={(Math.min(1, org.killCount / 10) + Math.min(1, org.offspring / 20)) / 2}
+          color="purple"
+        />
       </div>
     </div>
   );
