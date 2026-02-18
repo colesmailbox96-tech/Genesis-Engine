@@ -335,7 +335,11 @@ export class Simulation {
 
         // Event-driven: skip low-activity pairs
         if (mol.age > 1000 && other.age > 1000 && mol.energy < 1 && other.energy < 1) {
-          if (this.rng.next() < 0.3) continue;
+          const combinedAge = mol.age + other.age;
+          const energyDeficit = 2 - (mol.energy + other.energy);
+          const rawSkipProb = 0.3 * (combinedAge / 2000) * Math.max(0, energyDeficit);
+          const skipProb = Math.min(0.9, rawSkipProb);
+          if (this.rng.next() < skipProb) continue;
         }
 
         const rule = this.reactionSystem.checkReaction(mol, other, zone.temperature, undefined, zone.wetness);
