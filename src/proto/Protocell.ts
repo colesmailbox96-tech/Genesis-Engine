@@ -195,7 +195,12 @@ export class Protocell implements SpatialEntity {
 
     let energyGained = 0;
     if (neighbor.membrane.stability < 0.2 && neighbor.interior.length > 0) {
-      const shuffled = [...neighbor.interior].sort(() => rng.next() - 0.5);
+      // Fisher-Yates shuffle for unbiased selection
+      const shuffled = [...neighbor.interior];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = rng.int(0, i + 1);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
       const stolen = shuffled.slice(0, Math.min(3, shuffled.length));
       for (const mol of stolen) {
         const idx = neighbor.interior.indexOf(mol);

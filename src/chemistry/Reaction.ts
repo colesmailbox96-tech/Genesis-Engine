@@ -244,11 +244,9 @@ export class ReactionSystem {
       const maxBondsA = ELEMENT_PROPERTIES[elA].bondSites;
       const maxBondsB = ELEMENT_PROPERTIES[elB].bondSites;
 
-      // If BOTH candidate sites would exceed max bondCount, skip bond creation
+      // If BOTH candidate sites would exceed max bondCount, synthesis cannot proceed
       if (atoms[a1].bondCount >= maxBondsA && atoms[a2 + offset].bondCount >= maxBondsB) {
-        const product = new Molecule(atoms, bonds, position, Math.max(0, totalEnergy));
-        product.catalyticSites = [...mol1.catalyticSites, ...mol2.catalyticSites];
-        return [product];
+        return [];
       }
 
       const diff = Math.abs(

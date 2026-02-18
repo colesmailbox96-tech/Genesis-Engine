@@ -48,8 +48,8 @@ export class InformationPolymer {
     }
 
     // Eigen threshold check: if error rate exceeds 1/L, collapse fidelity slightly
-    const threshold = InformationPolymer.eigenThreshold(1 - this.fidelity, newSeq.length);
-    const newFidelity = (1 - this.fidelity) > threshold
+    const maxTolerableErrorRate = InformationPolymer.eigenThreshold(1 - this.fidelity, newSeq.length);
+    const newFidelity = (1 - this.fidelity) > maxTolerableErrorRate
       ? Math.max(MIN_FIDELITY_AFTER_CATASTROPHE, this.fidelity - FIDELITY_DEGRADATION_STEP)  // error catastrophe: fidelity degrades
       : this.fidelity;
     return new InformationPolymer(newSeq, newFidelity);

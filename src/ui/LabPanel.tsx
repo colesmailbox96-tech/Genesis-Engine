@@ -12,12 +12,18 @@ interface SliderProps {
   onChange: (v: number) => void;
 }
 
+function getDecimalPlaces(step: number): number {
+  if (step < 0.01) return 4;
+  if (step < 1) return 2;
+  return 0;
+}
+
 function Slider({ label, value, min, max, step, unit = '', onChange }: SliderProps) {
   return (
     <div className="mb-2">
       <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
         <span>{label}</span>
-        <span className="text-white">{value.toFixed(step < 0.01 ? 4 : step < 1 ? 2 : 0)}{unit}</span>
+        <span className="text-white">{value.toFixed(getDecimalPlaces(step))}{unit}</span>
       </div>
       <input
         type="range"

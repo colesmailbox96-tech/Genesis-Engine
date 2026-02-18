@@ -139,7 +139,7 @@ export class ChemicalField {
           const i = this.idx(gx, gy);
           if (surfaceMap[i] > 0.5) {
             const adsorbed = grid[i] * surfaceMap[i] * rate * 0.1;
-            this.addSource(gx * this.cellSize, gy * this.cellSize, 'surface_catalyst', adsorbed);
+            this.addSource(gx * this.cellSize, gy * this.cellSize, 'surface_adsorbed', adsorbed);
             grid[i] *= decayFactor;
           }
         }
