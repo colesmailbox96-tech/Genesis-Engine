@@ -57,6 +57,16 @@ function OrganismInspector({ org }: { org: Organism }) {
         <div>Brain: {nodeCount} nodes, {connCount} conns</div>
         <div>Hidden nodes: {org.genome.neuralGenome.nodeGenes.filter(n => n.type === 'hidden').length}</div>
       </div>
+      {/* Genome view */}
+      {org.genome.neuralGenome.nodeGenes.length > 0 && (
+        <div className="border-t border-gray-700 pt-2 mt-2">
+          <GenomeDiffView seq={org.genome.neuralGenome.nodeGenes.map(n => n.id % 4)} />
+          <div className="mt-1 text-[10px]">
+            <span className="text-gray-400">Connections: {org.genome.neuralGenome.connectionGenes.filter(c => c.enabled).length}</span>
+            <span className="text-gray-500 ml-2">disabled: {org.genome.neuralGenome.connectionGenes.filter(c => !c.enabled).length}</span>
+          </div>
+        </div>
+      )}
       <div className="border-t border-gray-700 pt-2 mt-2">
         <div>Offspring: {org.offspring}</div>
         <div>Kills: {org.killCount}</div>
@@ -72,6 +82,14 @@ function OrganismInspector({ org }: { org: Organism }) {
           ))}
         </div>
       )}
+      {/* Selection explanation */}
+      <div className="border-t border-gray-700 pt-2 mt-2">
+        <div className="text-cyan-400 text-[10px] mb-1">📈 Selection Pressure</div>
+        <SelectionBar label="Replication Rate" value={Math.min(1, org.offspring / Math.max(1, org.age / 1000))} color="green" />
+        <SelectionBar label="Survival (Energy)" value={energyPct / 100} color="yellow" />
+        <SelectionBar label="Integrity" value={intPct / 100} color="blue" />
+        <SelectionBar label="Niche Fitness" value={Math.min(1, org.killCount / 10 + org.offspring / 20)} color="purple" />
+      </div>
     </div>
   );
 }
@@ -101,17 +119,23 @@ function MoleculeInspector({ mol }: { mol: Molecule }) {
       <div>Bonds: {mol.bonds.length}</div>
       <div>Polarity: {mol.polarity.toFixed(2)}</div>
       <div>Chain: {mol.getChainLength()}</div>
+      <div>Stability: <span className="text-cyan-400">{mol.stabilityScore.toFixed(2)}</span></div>
+      <div>Redox potential: <span className={mol.redoxPotential >= 0 ? 'text-red-400' : 'text-blue-400'}>{mol.redoxPotential.toFixed(3)}</span></div>
       {mol.catalyticSites.length > 0 && (
         <div className="text-amber-400">Catalytic: {mol.catalyticSites.length} sites</div>
       )}
       {mol.formation && (
         <div className="border-t border-gray-700 pt-2 mt-2">
-          <div className="text-cyan-400 text-[10px]">Formation Pathway</div>
-          <div>From: {mol.formation.parentFormulas.join(' + ')}</div>
-          <div>Reaction: {mol.formation.reactionType}</div>
-          <div>Zone: {mol.formation.zoneName}</div>
-          {mol.formation.catalystFormula && <div>Catalyst: {mol.formation.catalystFormula}</div>}
-          <div>At tick: {mol.formation.tick.toLocaleString()}</div>
+          <div className="text-cyan-400 text-[10px] mb-1">🔍 Causal Trace</div>
+          <div>Reaction: <span className="text-amber-400">{mol.formation.reactionType}</span></div>
+          <div>Zone: <span className="text-green-400">{mol.formation.zoneName}</span></div>
+          <div>Formed at tick: {mol.formation.tick.toLocaleString()}</div>
+          {mol.formation.parentFormulas.length > 0 && (
+            <div>Parents: <span className="text-purple-400">{mol.formation.parentFormulas.join(' + ')}</span></div>
+          )}
+          {mol.formation.catalystFormula && (
+            <div>Catalyst: <span className="text-amber-400">{mol.formation.catalystFormula}</span></div>
+          )}
         </div>
       )}
     </div>
@@ -134,6 +158,49 @@ function ProtocellInspector({ cell }: { cell: Protocell }) {
       <div>Complexity: {cell.complexityScore}</div>
       <div>Metabolism rate: {cell.metabolismRate.toFixed(4)}</div>
       {cell.parentId && <div className="text-cyan-400">Has parent (from division)</div>}
+    </div>
+  );
+}
+
+function GenomeDiffView({ seq }: { seq: number[] }) {
+  const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308'];
+  const LABELS = ['A', 'U', 'G', 'C'];
+  const display = seq.slice(0, 60);
+  return (
+    <div>
+      <div className="text-cyan-400 text-[10px] mb-1">🧬 Genome ({seq.length} bases)</div>
+      <div className="flex flex-wrap gap-[2px] max-h-16 overflow-hidden">
+        {display.map((base, i) => (
+          <div
+            key={i}
+            title={LABELS[base]}
+            style={{ backgroundColor: COLORS[base], width: 6, height: 6 }}
+            className="rounded-sm"
+          />
+        ))}
+        {seq.length > 60 && <span className="text-gray-500 text-[8px]">+{seq.length - 60}</span>}
+      </div>
+    </div>
+  );
+}
+
+function SelectionBar({ label, value, color }: { label: string; value: number; color: string }) {
+  const colorMap: Record<string, string> = {
+    green: 'bg-green-500',
+    yellow: 'bg-yellow-500',
+    blue: 'bg-blue-500',
+    purple: 'bg-purple-500',
+    red: 'bg-red-500',
+  };
+  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
+  return (
+    <div className="mb-1">
+      <div className="flex justify-between text-[9px] text-gray-400 mb-[1px]">
+        <span>{label}</span><span>{pct}%</span>
+      </div>
+      <div className="h-1.5 bg-gray-700 rounded overflow-hidden">
+        <div className={`h-full rounded ${colorMap[color] ?? 'bg-gray-500'}`} style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }

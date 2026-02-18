@@ -63,6 +63,11 @@ function getMotifs(mol: Molecule): CatalyticMotif[] {
   let cached = motifCache.get(key);
   if (!cached) {
     cached = CATALYTIC_MOTIFS.filter(m => m.test(mol));
+    if (motifCache.size > 1000) {
+      // Evict oldest 200 entries
+      const keys = Array.from(motifCache.keys()).slice(0, 200);
+      for (const k of keys) motifCache.delete(k);
+    }
     motifCache.set(key, cached);
   }
   return cached;

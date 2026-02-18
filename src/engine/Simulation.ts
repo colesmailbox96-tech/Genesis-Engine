@@ -280,6 +280,11 @@ export class Simulation {
       for (const other of nearby) {
         if (other.id === mol.id || toRemove.has(other.id) || toRemove.has(mol.id)) continue;
 
+        // Event-driven: skip low-activity pairs
+        if (mol.age > 1000 && other.age > 1000 && mol.energy < 1 && other.energy < 1) {
+          if (this.rng.next() < 0.3) continue;
+        }
+
         const rule = this.reactionSystem.checkReaction(mol, other, zone.temperature, undefined, zone.wetness);
         if (rule && this.rng.next() < rule.probability * zone.temperature) {
           const products = this.reactionSystem.executeReaction(mol, other, rule, this.rng);
@@ -486,6 +491,22 @@ export class Simulation {
 
     // Add new protocells
     this.protocells.push(...newProtocells);
+
+    // Cross-feeding: protocells leak metabolites that nearby cells can absorb
+    if (this.tick % 10 === 0) {
+      for (const cell of this.protocells) {
+        const leaked = cell.leakMetabolites(this.rng);
+        if (leaked.length === 0) continue;
+        for (const other of this.protocells) {
+          if (other.id === cell.id) continue;
+          if (cell.position.distanceTo(other.position) < 20) {
+            for (const metabolite of leaked) {
+              other.energy += metabolite.energy * 0.3; // cross-feed benefit
+            }
+          }
+        }
+      }
+    }
 
     // Cap protocells
     if (this.protocells.length > 200) {
