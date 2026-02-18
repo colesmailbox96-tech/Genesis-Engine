@@ -43,7 +43,7 @@ interface LabPanelProps {
 }
 
 export default function LabPanel({ onClose }: LabPanelProps) {
-  const { simulation, initSimulation, startSimulation, seed } = useGameStore();
+  const { initSimulation, startSimulation, seed } = useGameStore();
   const [config, setConfig] = useState<SimConfig>(DEFAULT_CONFIG);
 
   const update = (key: keyof SimConfig, value: number) =>
