@@ -143,16 +143,16 @@ export class Organism implements SpatialEntity {
   metabolize(environmentEnergy: number, lightLevel: number): void {
     switch (this.phenotype.metabolismType) {
       case 'chemosynthesis':
-        this.energy += environmentEnergy * this.phenotype.metabolicEfficiency * 0.1;
+        this.energy += environmentEnergy * this.phenotype.metabolicEfficiency * 0.5;
         break;
       case 'photosynthesis':
-        this.energy += lightLevel * this.phenotype.metabolicEfficiency * 0.15;
+        this.energy += lightLevel * this.phenotype.metabolicEfficiency * 0.6;
         break;
       case 'heterotrophy':
         // Energy gained through ingestion handled elsewhere
         break;
       case 'fermentation':
-        this.energy += environmentEnergy * this.phenotype.metabolicEfficiency * 0.05;
+        this.energy += environmentEnergy * this.phenotype.metabolicEfficiency * 0.25;
         break;
     }
 

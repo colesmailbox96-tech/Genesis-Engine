@@ -21,5 +21,5 @@ export function computeNeuralCost(genome: NEATGenome): number {
   for (const c of genome.connectionGenes) {
     if (c.enabled) enabledConnCount++;
   }
-  return (nodeCount * 0.001 + enabledConnCount * 0.0005);
+  return (nodeCount * 0.0002 + enabledConnCount * 0.0001);
 }
