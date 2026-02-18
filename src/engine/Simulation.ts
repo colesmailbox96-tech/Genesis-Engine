@@ -1029,7 +1029,9 @@ export class Simulation {
           const clusters = new Set<string>();
           for (const org of organisms) {
             const nearby = this.organismManager.getNearby(org.position.x, org.position.y, 5);
-            if (nearby.length >= 3) { clusters.add(org.species.toString()); }
+            const nearbyOthers = nearby.filter(o => o !== org);
+            // Require at least two *other* organisms nearby → cluster of at least three including this one
+            if (nearbyOthers.length >= 2) { clusters.add(org.species.toString()); }
           }
           if (clusters.size > 0) {
             this.addMilestone('MULTICELLULAR_ISH', `Proto-multicellular cluster detected (${clusters.size} species participating)`);
