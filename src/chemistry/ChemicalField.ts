@@ -86,8 +86,9 @@ export class ChemicalField {
   }
 
   advect(flowField: (gx: number, gy: number) => Vector2): void {
+    const next = this.scratchBuffer;
     for (const [, grid] of this.concentrations) {
-      const next = new Float32Array(grid.length);
+      next.fill(0);
       for (let gy = 0; gy < this.gridSize; gy++) {
         for (let gx = 0; gx < this.gridSize; gx++) {
           const flow = flowField(gx, gy);

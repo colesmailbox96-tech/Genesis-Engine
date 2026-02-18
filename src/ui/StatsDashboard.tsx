@@ -1,7 +1,7 @@
 import React from 'react';
 import { useGameStore } from '../store';
 
-export default function StatsDashboard() {
+export default React.memo(function StatsDashboard() {
   const { showStats, setShowStats, simulation } = useGameStore();
 
   if (!showStats || !simulation) return null;
@@ -47,7 +47,7 @@ export default function StatsDashboard() {
       </div>
     </div>
   );
-}
+});
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (

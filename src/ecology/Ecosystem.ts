@@ -1,6 +1,13 @@
 import { Organism } from '../organisms/Organism';
 import { SpeciationSystem } from '../evolution/Speciation';
 
+const MET_TO_NICHE: Record<string, string> = {
+  chemosynthesis: 'vent_chemotroph',
+  photosynthesis: 'surface_phototroph',
+  fermentation: 'deep_fermentor',
+  heterotrophy: 'tidal_scavenger',
+};
+
 export interface TrophicLevel {
   level: number;
   species: number[];
@@ -24,6 +31,8 @@ export class Ecosystem {
   extinctionRate: number = 0;
   resourceNiches: ResourceNiche[] = [];
   private previousSpeciesCount: number = 0;
+  /** O(1) niche lookup by name – kept in sync with resourceNiches */
+  private nicheMap: Map<string, ResourceNiche> = new Map();
 
   constructor() {
     // Define resource niches
@@ -33,6 +42,7 @@ export class Ecosystem {
       { name: 'deep_fermentor', energySource: 'organic', temperatureRange: [0.1, 0.4], currentUsers: 0, capacity: 150 },
       { name: 'tidal_scavenger', energySource: 'detritus', temperatureRange: [0.2, 0.6], currentUsers: 0, capacity: 100 },
     ];
+    for (const niche of this.resourceNiches) this.nicheMap.set(niche.name, niche);
   }
 
   update(organisms: Organism[], speciationSystem: SpeciationSystem): void {
@@ -72,28 +82,38 @@ export class Ecosystem {
       this.trophicLevels.push({ level: 3, species: secondaryConsumers, totalPopulation: 0, totalEnergy: 0 });
     }
 
-    // Update populations and energy; assign to niches
+    // Build a species-id → TrophicLevel map for O(1) lookup (avoids O(n²) nested loop)
+    const speciesLevelMap = new Map<number, TrophicLevel>();
+    for (const tl of this.trophicLevels) {
+      for (const spId of tl.species) speciesLevelMap.set(spId, tl);
+    }
+
+    // Single-pass over organisms: accumulate energy, trophic stats, niche counts,
+    // photosynthesizer count, and species counts for Shannon diversity.
+    const speciesCounts = new Map<number, number>();
+    let photoCount = 0;
     for (const org of organisms) {
       this.totalEnergy += org.energy;
-      for (const tl of this.trophicLevels) {
-        if (tl.species.includes(org.species)) {
-          tl.totalPopulation++;
-          tl.totalEnergy += org.energy;
-        }
+
+      const tl = speciesLevelMap.get(org.species);
+      if (tl) {
+        tl.totalPopulation++;
+        tl.totalEnergy += org.energy;
       }
-      // Assign to best-fit resource niche
-      this.assignToNiche(org);
+
+      const nicheName = MET_TO_NICHE[org.phenotype.metabolismType] ?? 'tidal_scavenger';
+      const niche = this.nicheMap.get(nicheName);
+      if (niche) niche.currentUsers++;
+
+      if (org.phenotype.metabolismType === 'photosynthesis') photoCount++;
+
+      speciesCounts.set(org.species, (speciesCounts.get(org.species) ?? 0) + 1);
     }
 
     // Track O2 from photosynthesizers
-    const photoCount = organisms.filter(o => o.phenotype.metabolismType === 'photosynthesis').length;
     this.oxygenLevel = Math.min(1, photoCount * 0.001);
 
     // Calculate Shannon diversity index
-    const speciesCounts = new Map<number, number>();
-    for (const org of organisms) {
-      speciesCounts.set(org.species, (speciesCounts.get(org.species) ?? 0) + 1);
-    }
     const total = organisms.length;
     if (total > 0) {
       let h = 0;
@@ -116,28 +136,10 @@ export class Ecosystem {
     this.previousSpeciesCount = currentSpeciesCount;
   }
 
-  private assignToNiche(org: Organism): void {
-    const metToNiche: Record<string, string> = {
-      chemosynthesis: 'vent_chemotroph',
-      photosynthesis: 'surface_phototroph',
-      fermentation: 'deep_fermentor',
-      heterotrophy: 'tidal_scavenger',
-    };
-    const nicheName = metToNiche[org.phenotype.metabolismType] ?? 'tidal_scavenger';
-    const niche = this.resourceNiches.find(n => n.name === nicheName);
-    if (niche) niche.currentUsers++;
-  }
-
   /** Returns carrying capacity pressure (>1 means over capacity) for an organism's niche */
   getNichePressure(org: Organism): number {
-    const metToNiche: Record<string, string> = {
-      chemosynthesis: 'vent_chemotroph',
-      photosynthesis: 'surface_phototroph',
-      fermentation: 'deep_fermentor',
-      heterotrophy: 'tidal_scavenger',
-    };
-    const nicheName = metToNiche[org.phenotype.metabolismType] ?? 'tidal_scavenger';
-    const niche = this.resourceNiches.find(n => n.name === nicheName);
+    const nicheName = MET_TO_NICHE[org.phenotype.metabolismType] ?? 'tidal_scavenger';
+    const niche = this.nicheMap.get(nicheName);
     if (!niche) return 1;
     return niche.currentUsers / Math.max(1, niche.capacity);
   }
