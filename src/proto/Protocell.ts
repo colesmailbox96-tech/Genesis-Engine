@@ -90,7 +90,7 @@ export class Protocell implements SpatialEntity {
 
     // Replicator activity
     for (const rep of this.replicators) {
-      const child = rep.tick(this.energy, rng);
+      const child = rep.tick(this.energy, rng, temperature);
       if (child) {
         this.energy -= rep.energyCost;
         this.replicators.push(child);

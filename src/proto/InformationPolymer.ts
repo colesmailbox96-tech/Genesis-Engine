@@ -43,7 +43,29 @@ export class InformationPolymer {
       newSeq.splice(insertAt, 0, ...segment);
     }
 
-    return new InformationPolymer(newSeq, this.fidelity);
+    // Eigen threshold check: if error rate exceeds 1/L, collapse fidelity slightly
+    const threshold = InformationPolymer.eigenThreshold(1 - this.fidelity, newSeq.length);
+    const newFidelity = (1 - this.fidelity) > threshold
+      ? Math.max(0.5, this.fidelity - 0.001)  // error catastrophe: fidelity degrades
+      : this.fidelity;
+    return new InformationPolymer(newSeq, newFidelity);
+  }
+
+  copyWithTemperature(rng: Random, temperature: number): InformationPolymer {
+    // Higher temperature → more mutations
+    const tempFidelity = this.fidelity * (1 - temperature * 0.3);
+    const tempPolymer = new InformationPolymer(this.sequence, tempFidelity);
+    return tempPolymer.copy(rng);
+  }
+
+  static eigenThreshold(_mutationRate: number, genomeLength: number): number {
+    // Eigen's error threshold: error_rate < 1/genome_length for stable replication
+    return 1.0 / Math.max(1, genomeLength);
+  }
+
+  isAboveErrorThreshold(): boolean {
+    const mutRate = 1 - this.fidelity;
+    return mutRate > InformationPolymer.eigenThreshold(mutRate, this.length);
   }
 
   similarity(other: InformationPolymer): number {

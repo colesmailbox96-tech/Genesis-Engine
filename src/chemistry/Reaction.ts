@@ -15,6 +15,7 @@ export interface ReactionRule {
   products: MoleculePattern[];
   activationEnergy: number;
   energyDelta: number;
+  isExergonic: boolean;
   catalystPattern?: MoleculePattern;
   catalyticReduction: number;
   temperatureRange: [number, number];
@@ -41,6 +42,7 @@ const CORE_RULES: ReactionRule[] = [
     products: [{ minAtoms: 2 }],
     activationEnergy: 5,
     energyDelta: -2,
+    isExergonic: true,
     catalyticReduction: 0.5,
     temperatureRange: [0, 500],
     probability: 0.3,
@@ -51,6 +53,7 @@ const CORE_RULES: ReactionRule[] = [
     products: [{ minAtoms: 1 }, { minAtoms: 1 }],
     activationEnergy: 15,
     energyDelta: 5,
+    isExergonic: false,
     catalyticReduction: 0.4,
     temperatureRange: [200, 1000],
     probability: 0.1,
@@ -61,6 +64,7 @@ const CORE_RULES: ReactionRule[] = [
     products: [{ minAtoms: 3 }],
     activationEnergy: 8,
     energyDelta: -3,
+    isExergonic: true,
     catalyticReduction: 0.6,
     temperatureRange: [50, 400],
     probability: 0.15,
@@ -71,6 +75,7 @@ const CORE_RULES: ReactionRule[] = [
     products: [{ minAtoms: 2 }],
     activationEnergy: 3,
     energyDelta: -1,
+    isExergonic: true,
     catalystPattern: { minAtoms: 3, minChainLength: 2 },
     catalyticReduction: 0.7,
     temperatureRange: [0, 600],
@@ -82,6 +87,7 @@ const CORE_RULES: ReactionRule[] = [
     products: [{ minAtoms: 1 }, { minAtoms: 1 }],
     activationEnergy: 2,
     energyDelta: 0,
+    isExergonic: false,
     catalyticReduction: 0.3,
     temperatureRange: [0, 800],
     probability: 0.2,
@@ -92,6 +98,7 @@ const CORE_RULES: ReactionRule[] = [
     products: [{ minAtoms: 4 }],
     activationEnergy: 4,
     energyDelta: -2,
+    isExergonic: true,
     catalyticReduction: 0.8,
     temperatureRange: [50, 500],
     probability: 0.1,
@@ -103,6 +110,7 @@ const CORE_RULES: ReactionRule[] = [
     products: [{ minAtoms: 1 }, { minAtoms: 1 }],
     activationEnergy: 6,
     energyDelta: 3,
+    isExergonic: false,
     catalyticReduction: 0.3,
     temperatureRange: [0, 400],
     probability: 0.08,
@@ -172,6 +180,15 @@ export class ReactionSystem {
       const availableEnergy = mol1.energy + mol2.energy + temperature * 0.1;
       if (availableEnergy < effectiveActivation) continue;
 
+      // Redox balance: exergonic reactions with very negative reactant redox get a probability boost
+      if (rule.isExergonic) {
+        const redoxSum = mol1.redoxPotential + mol2.redoxPotential;
+        if (redoxSum < -1.0) {
+          // Favorable thermodynamics: boost probability ×1.5 (applied in executeReaction)
+          return { ...rule, probability: Math.min(1, rule.probability * 1.5) };
+        }
+      }
+
       return rule;
     }
     return null;
@@ -221,11 +238,30 @@ export class ReactionSystem {
     if (a1 >= 0 && a2 >= 0) {
       const elA = atoms[a1].element;
       const elB = atoms[a2 + offset].element;
+      const maxBondsA = ELEMENT_PROPERTIES[elA].bondSites;
+      const maxBondsB = ELEMENT_PROPERTIES[elB].bondSites;
+
+      // If BOTH candidate sites would exceed max bondCount, skip bond creation
+      if (atoms[a1].bondCount >= maxBondsA && atoms[a2 + offset].bondCount >= maxBondsB) {
+        const product = new Molecule(atoms, bonds, position, Math.max(0, totalEnergy));
+        product.catalyticSites = [...mol1.catalyticSites, ...mol2.catalyticSites];
+        return [product];
+      }
+
       const diff = Math.abs(
         ELEMENT_PROPERTIES[elA].electronegativity - ELEMENT_PROPERTIES[elB].electronegativity,
       );
       const bondType = diff > 0.4 ? 'ionic' as const : 'covalent' as const;
-      bonds.push({ atomA: a1, atomB: a2 + offset, strength: 1 - diff * 0.5, type: bondType });
+
+      // Choose bond order: double if electronegativity diff < 0.1 and both atoms have room
+      const bondOrder: 'single' | 'double' =
+        (diff < 0.1 &&
+          atoms[a1].bondCount < maxBondsA - 1 &&
+          atoms[a2 + offset].bondCount < maxBondsB - 1)
+          ? 'double'
+          : 'single';
+
+      bonds.push({ atomA: a1, atomB: a2 + offset, strength: 1 - diff * 0.5, type: bondType, order: bondOrder });
       atoms[a1].bondCount++;
       atoms[a2 + offset].bondCount++;
     }

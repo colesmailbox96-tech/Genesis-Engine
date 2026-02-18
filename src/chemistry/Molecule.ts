@@ -14,7 +14,10 @@ export interface Bond {
   atomB: number;
   strength: number;
   type: 'covalent' | 'ionic' | 'hydrogen';
+  order?: 'single' | 'double';
 }
+
+export const BOND_ENERGIES = { single: 1.0, double: 2.0 } as const;
 
 export interface CatalyticSite {
   targetReactionType: string;
@@ -45,6 +48,7 @@ export class Molecule implements SpatialEntity {
   role: MoleculeRole;
   formation: FormationRecord | null;
   halfLife: number;
+  redoxPotential: number;
   private _cachedChainLength: number = -1;
 
   constructor(
@@ -66,6 +70,7 @@ export class Molecule implements SpatialEntity {
     this.role = 'unknown';
     this.formation = null;
     this.halfLife = this.estimateHalfLife();
+    this.redoxPotential = this.computeRedoxPotential();
   }
 
   estimateHalfLife(): number {
@@ -232,6 +237,31 @@ export class Molecule implements SpatialEntity {
   tick(): void {
     this.age++;
     this.position.addMut(this.velocity);
+  }
+
+  get stabilityScore(): number {
+    const bondSum = this.bonds.reduce((s, b) => s + BOND_ENERGIES[b.order ?? 'single'], 0);
+    let strainPenalty = 0;
+    for (const atom of this.atoms) {
+      const maxBonds = ELEMENT_PROPERTIES[atom.element].bondSites;
+      if (atom.bondCount > maxBonds) strainPenalty += (atom.bondCount - maxBonds) * 2;
+    }
+    return bondSum - strainPenalty;
+  }
+
+  private computeRedoxPotential(): number {
+    let potential = 0;
+    for (const atom of this.atoms) {
+      switch (atom.element) {
+        case Element.O: potential += 0.4; break;
+        case Element.S: potential += 0.3; break;
+        case Element.N: potential += 0.1; break;
+        case Element.C: potential -= 0.2; break;
+        case Element.H: potential -= 0.1; break;
+        default: break;
+      }
+    }
+    return potential;
   }
 
   static createRandom(element: Element, position: Vector2, _rng: Random): Molecule {
