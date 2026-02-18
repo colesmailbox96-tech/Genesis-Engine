@@ -1,11 +1,12 @@
 import { Organism } from '../organisms/Organism';
 
 export function calculateFitness(organism: Organism): number {
-  // Fitness based on survival time, energy, offspring
+  // Fitness based on survival time, energy, offspring, and ecological success
   const ageFactor = Math.min(organism.age / 10000, 1) * 20;
-  const energyFactor = organism.energy / organism.phenotype.energyCapacity * 10;
+  const energyFactor = (organism.energy / organism.phenotype.energyCapacity) * 10;
   const offspringFactor = organism.offspring * 5;
-  return ageFactor + energyFactor + offspringFactor;
+  const predationFactor = Math.min(organism.killCount, 10) * 2;
+  return ageFactor + energyFactor + offspringFactor + predationFactor;
 }
 
 export function applySelectionPressure(organisms: Organism[], maxPop: number): Organism[] {
