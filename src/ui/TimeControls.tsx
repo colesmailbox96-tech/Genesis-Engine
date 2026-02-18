@@ -61,6 +61,7 @@ export default function TimeControls() {
       <div className="flex items-center gap-3">
         <ZoomIndicator />
         <VolumeControl />
+        <ResearchToggle />
         <MilestoneToggle />
       </div>
     </div>
@@ -87,6 +88,21 @@ function VolumeControl() {
       className="w-16 h-1 accent-cyan-500"
       title="Volume"
     />
+  );
+}
+
+function ResearchToggle() {
+  const { showResearch, setShowResearch } = useGameStore();
+  return (
+    <button
+      onClick={() => setShowResearch(!showResearch)}
+      className={`px-2 py-1 rounded text-xs font-mono ${
+        showResearch ? 'bg-cyan-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+      }`}
+      title="Research Panel (F9)"
+    >
+      🔬
+    </button>
   );
 }
 

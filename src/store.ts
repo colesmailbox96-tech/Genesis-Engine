@@ -22,6 +22,7 @@ export interface GameStore {
   showInspector: boolean;
   showMilestones: boolean;
   showStats: boolean;
+  showResearch: boolean;
   seed: number;
   volume: number;
 
@@ -44,6 +45,7 @@ export interface GameStore {
   setShowInspector: (show: boolean) => void;
   setShowMilestones: (show: boolean) => void;
   setShowStats: (show: boolean) => void;
+  setShowResearch: (show: boolean) => void;
   setVolume: (volume: number) => void;
   updateStats: () => void;
   updatePerf: (fps: number, tps: number) => void;
@@ -65,6 +67,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   showInspector: false,
   showMilestones: false,
   showStats: false,
+  showResearch: false,
   seed: Math.floor(Math.random() * 999999),
   volume: 0.3,
   population: 0,
@@ -103,6 +106,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setShowInspector: (show) => set({ showInspector: show }),
   setShowMilestones: (show) => set({ showMilestones: show }),
   setShowStats: (show) => set({ showStats: show }),
+  setShowResearch: (show) => set({ showResearch: show }),
   setVolume: (volume) => set({ volume }),
 
   updateStats: () => {

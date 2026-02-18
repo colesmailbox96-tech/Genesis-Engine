@@ -8,9 +8,10 @@ import InspectorPanel from './ui/InspectorPanel';
 import MilestoneLog from './ui/MilestoneLog';
 import MiniMap from './ui/MiniMap';
 import StatsDashboard from './ui/StatsDashboard';
+import ResearchPanel from './ui/ResearchPanel';
 
 export default function App() {
-  const { simulation, showStats, setShowStats } = useGameStore();
+  const { simulation, showStats, setShowStats, showResearch, setShowResearch } = useGameStore();
 
   // F10 for stats dashboard
   useEffect(() => {
@@ -19,10 +20,14 @@ export default function App() {
         e.preventDefault();
         setShowStats(!showStats);
       }
+      if (e.key === 'F9') {
+        e.preventDefault();
+        setShowResearch(!showResearch);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showStats, setShowStats]);
+  }, [showStats, setShowStats, showResearch, setShowResearch]);
 
   // Auto-save on page unload
   useEffect(() => {
@@ -46,6 +51,7 @@ export default function App() {
           <MilestoneLog />
           <TimeControls />
           <StatsDashboard />
+          <ResearchPanel />
         </>
       )}
     </div>
