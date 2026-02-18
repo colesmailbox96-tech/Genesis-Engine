@@ -193,7 +193,10 @@ export class Genome {
       });
     }
 
-    // Gene deletion — rate increases with genome length to counter bloat
+    // Gene deletion — rate increases with genome length to counter bloat.
+    // 15 genes is the baseline complexity for a functional organism (body + sensors
+    // + actuators + metabolism). Beyond that, each extra gene adds 0.5% deletion
+    // probability, providing gradual pressure against unbounded genome growth.
     const deletionRate = this.mutationRate * 0.3 + Math.max(0, (newGenes.length - 15) * 0.005);
     if (rng.next() < deletionRate && newGenes.length > 5) {
       newGenes.splice(rng.int(0, newGenes.length), 1);

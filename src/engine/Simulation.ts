@@ -738,8 +738,9 @@ export class Simulation {
         }
       }
 
-      // Carrying capacity pressure — organisms in over-crowded niches lose energy faster
-      // Quadratic scaling: pressure ramps up sharply as niche exceeds capacity
+      // Carrying capacity pressure — organisms in over-crowded niches lose energy faster.
+      // Quadratic scaling models increasing metabolic stress: at 2× capacity the penalty
+      // is 4× stronger than at 1.5×, effectively capping runaway population growth.
       const nichePressure = this.ecosystem.getNichePressure(org);
       if (nichePressure > 1) {
         const excess = nichePressure - 1;
@@ -758,9 +759,14 @@ export class Simulation {
             const defenseReduction = other.phenotype.shellThickness * 0.3 + other.phenotype.toxicity * 0.3;
             const combatScore = massRatio + offenseBonus - defenseReduction;
 
+            // Minimum viable advantage for a successful hunt attempt
             if (combatScore > 0.8) {
-              // Trophic efficiency: predator only assimilates a fraction of prey energy
+              // ~30% trophic efficiency models realistic energy transfer between trophic
+              // levels in ecological food chains (Lindeman's 10% rule, relaxed for
+              // single-celled organisms with simpler digestion).
               const trophicEfficiency = 0.3;
+              // Extract half the prey's energy per attack; the rest remains for
+              // potential survival or is released as waste on death.
               const extractedEnergy = other.energy * 0.5;
               other.energy -= extractedEnergy;
               org.energy += extractedEnergy * trophicEfficiency;
