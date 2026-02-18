@@ -192,6 +192,7 @@ export class Simulation {
 
     // Update environment cycles
     this.environmentMap.updateCycles(this.tick);
+    this.environmentMap.decayChemistry();
 
     // Chemistry
     this.updateChemistry();
@@ -448,6 +449,11 @@ export class Simulation {
     for (const cell of this.protocells) {
       const zone = this.environmentMap.getZoneAt(cell.position.x, cell.position.y);
       const daughter = cell.tick(this.rng, zone.temperature);
+
+      // Environmental pH/redox feedback from protocell metabolism
+      const pHDelta = cell.metabolism.metabolismRate > 0 ? -0.001 : 0;
+      const redoxDelta = cell.energy > 0 ? 0.001 : -0.001;
+      this.environmentMap.modifyLocalChemistry(cell.position.x, cell.position.y, pHDelta, redoxDelta);
 
       if (daughter) {
         newProtocells.push(daughter);
@@ -805,6 +811,42 @@ export class Simulation {
           }
         }
       }
+
+      // COMPARTMENT: first stable vesicle with trapped contents
+      if (!this.milestoneSet.has('COMPARTMENT')) {
+        const stableCell = this.protocells.find(c => c.interior.length >= 3 && c.integrity >= 0.7);
+        if (stableCell) {
+          this.addMilestone('COMPARTMENT', `First stable compartment (${stableCell.interior.length} trapped molecules, integrity ${stableCell.integrity.toFixed(2)})`);
+        }
+      }
+
+      // TEMPLATE_REPLICATION: genome copying observed
+      if (!this.milestoneSet.has('TEMPLATE_REPLICATION')) {
+        const cell = this.protocells.find(c => c.replicators.length > 0 && c.replicators[0].copyCount >= 2);
+        if (cell) {
+          this.addMilestone('TEMPLATE_REPLICATION', `Template replication observed (${cell.replicators[0].copyCount} copies, length ${cell.replicators[0].polymer.length})`);
+        }
+      }
+
+      // PROTON_GRADIENT: compartment with pH differential from environment
+      if (!this.milestoneSet.has('PROTON_GRADIENT')) {
+        for (const cell of this.protocells) {
+          const localPH = this.environmentMap.getLocalPH(cell.position.x, cell.position.y);
+          const internalPH = 7.0 + (cell.energy - 1) * 0.5;
+          if (Math.abs(internalPH - localPH) > 1.0) {
+            this.addMilestone('PROTON_GRADIENT', `Proton gradient detected (ΔpH: ${Math.abs(internalPH - localPH).toFixed(2)})`);
+            break;
+          }
+        }
+      }
+
+      // CATALYTIC_CYCLE: closed-loop metabolic network (3+ pathways)
+      if (!this.milestoneSet.has('CATALYTIC_CYCLE')) {
+        const cell = this.protocells.find(c => c.metabolism.pathways.length >= 3 && c.metabolism.totalEnergyProduced > 0);
+        if (cell) {
+          this.addMilestone('CATALYTIC_CYCLE', `Catalytic cycle: ${cell.metabolism.pathways.length} metabolic pathways active`);
+        }
+      }
     }
 
     // Stage 3 milestones (organism-based) — only check every 100 ticks
@@ -851,6 +893,42 @@ export class Simulation {
 
       if (!this.milestoneSet.has('ECOSYSTEM') && this.speciationSystem.getSpeciesCount() >= 5) {
         this.addMilestone('ECOSYSTEM', `${this.speciationSystem.getSpeciesCount()} species coexisting`);
+      }
+
+      // PROOFREADING: mutation rate drops (fidelity improvement observed)
+      if (!this.milestoneSet.has('PROOFREADING')) {
+        for (const cell of this.protocells) {
+          if (cell.replicators.length > 0 && cell.replicators[0].polymer.fidelity > 0.95) {
+            this.addMilestone('PROOFREADING', `High-fidelity replication evolved (fidelity: ${cell.replicators[0].polymer.fidelity.toFixed(3)})`);
+            break;
+          }
+        }
+      }
+
+      // PHOTOSYNTHESIS_LIKE: UV harvesting milestone
+      if (!this.milestoneSet.has('PHOTOSYNTHESIS_LIKE') && !this.milestoneSet.has('PHOTOSYNTHESIS')) {
+        const uvSource = this.energySources.find(s => s.type === 'uv_radiation');
+        if (uvSource) {
+          const nearUV = this.protocells.find(c => c.position.distanceTo(uvSource.position) < uvSource.radius * 0.5 && c.energy > 2);
+          if (nearUV) {
+            this.addMilestone('PHOTOSYNTHESIS_LIKE', `UV energy harvesting (protocell thriving in UV zone with energy ${nearUV.energy.toFixed(1)})`);
+          }
+        }
+      }
+
+      // MULTICELLULAR_ISH: multiple organisms moving as cluster (adhesion)
+      if (!this.milestoneSet.has('MULTICELLULAR_ISH')) {
+        const organisms = this.organismManager.organisms;
+        if (organisms.length >= 3) {
+          const clusters = new Set<string>();
+          for (const org of organisms) {
+            const nearby = this.organismManager.getNearby(org.position.x, org.position.y, 5);
+            if (nearby.length >= 3) { clusters.add(org.species.toString()); break; }
+          }
+          if (clusters.size > 0) {
+            this.addMilestone('MULTICELLULAR_ISH', `Proto-multicellular cluster detected (${clusters.size} species participating)`);
+          }
+        }
       }
     }
   }

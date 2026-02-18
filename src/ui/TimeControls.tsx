@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store';
 
-export default function TimeControls() {
+export default function TimeControls({ onOpenLab }: { onOpenLab?: () => void }) {
   const { isRunning, speed, startSimulation, pauseSimulation, setSpeed, skipTicks, simulation, saveState } = useGameStore();
   const [saveFlash, setSaveFlash] = useState(false);
 
@@ -57,6 +57,15 @@ export default function TimeControls() {
         >
           {saveFlash ? '✓' : '💾'}
         </button>
+        {onOpenLab && (
+          <button
+            onClick={onOpenLab}
+            className="px-2 py-1 rounded text-xs font-mono ml-1 bg-gray-800 text-gray-400 hover:bg-gray-700"
+            title="Lab Mode"
+          >
+            🔬 Lab
+          </button>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <ZoomIndicator />

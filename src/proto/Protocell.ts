@@ -150,6 +150,23 @@ export class Protocell implements SpatialEntity {
     return daughter;
   }
 
+  leakMetabolites(rng: Random): { formula: string; energy: number }[] {
+    const leaked: { formula: string; energy: number }[] = [];
+    const leakProb = 0.02 * (1 - this.membrane.stability);
+    const toRemove = new Set<number>();
+    for (let i = 0; i < this.interior.length && leaked.length < 5; i++) {
+      const mol = this.interior[i];
+      if (mol.atoms.length <= 3 && rng.next() < leakProb) {
+        leaked.push({ formula: mol.getFormula(), energy: mol.energy });
+        toRemove.add(i);
+      }
+    }
+    if (toRemove.size > 0) {
+      this.interior = this.interior.filter((_, i) => !toRemove.has(i));
+    }
+    return leaked;
+  }
+
   absorbMolecule(mol: Molecule): boolean {
     const formula = mol.getFormula();
     const formulaPerm = this.membrane.permeability[formula] ?? 0.1;

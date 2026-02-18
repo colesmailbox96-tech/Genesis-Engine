@@ -107,4 +107,43 @@ export class ChemicalField {
   tick(): void {
     this.diffuse(0.1);
   }
+
+  tickWithViscosity(viscosityMap: Float32Array): void {
+    const next = this.scratchBuffer;
+    for (const [, grid] of this.concentrations) {
+      next.fill(0);
+      for (let gy = 0; gy < this.gridSize; gy++) {
+        for (let gx = 0; gx < this.gridSize; gx++) {
+          const i = this.idx(gx, gy);
+          const visc = Math.max(0, Math.min(1, viscosityMap[i]));
+          const rate = 0.1 * visc;
+          let sum = 0;
+          let count = 0;
+          if (gx > 0) { sum += grid[this.idx(gx - 1, gy)]; count++; }
+          if (gx < this.gridSize - 1) { sum += grid[this.idx(gx + 1, gy)]; count++; }
+          if (gy > 0) { sum += grid[this.idx(gx, gy - 1)]; count++; }
+          if (gy < this.gridSize - 1) { sum += grid[this.idx(gx, gy + 1)]; count++; }
+          const avg = count > 0 ? sum / count : 0;
+          next[i] = grid[i] + rate * (avg - grid[i]);
+        }
+      }
+      grid.set(next);
+    }
+  }
+
+  applySurfaceAdsorption(surfaceMap: Float32Array, rate: number = 0.05): void {
+    const decayFactor = 1 - rate;
+    for (const [, grid] of this.concentrations) {
+      for (let gy = 0; gy < this.gridSize; gy++) {
+        for (let gx = 0; gx < this.gridSize; gx++) {
+          const i = this.idx(gx, gy);
+          if (surfaceMap[i] > 0.5) {
+            const adsorbed = grid[i] * surfaceMap[i] * rate * 0.1;
+            this.addSource(gx * this.cellSize, gy * this.cellSize, 'surface_catalyst', adsorbed);
+            grid[i] *= decayFactor;
+          }
+        }
+      }
+    }
+  }
 }
