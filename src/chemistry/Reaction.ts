@@ -184,15 +184,16 @@ export class ReactionSystem {
       if (availableEnergy < effectiveActivation) continue;
 
       // Redox balance: exergonic reactions with very negative reactant redox get a probability boost
+      let probability = rule.probability;
       if (rule.isExergonic) {
         const redoxSum = mol1.redoxPotential + mol2.redoxPotential;
         if (redoxSum < REDOX_FAVORABLE_THRESHOLD) {
           // Favorable thermodynamics: boost probability ×1.5 (applied in executeReaction)
-          return { ...rule, probability: Math.min(1, rule.probability * 1.5) };
+          probability = Math.min(1, rule.probability * 1.5);
         }
       }
 
-      return rule;
+      return { ...rule, probability };
     }
     return null;
   }
