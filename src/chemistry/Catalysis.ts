@@ -13,8 +13,7 @@ export const CATALYTIC_MOTIFS: CatalyticMotif[] = [
   {
     name: 'NN_motif',
     test: (mol) => mol.bonds.some(b =>
-      mol.atoms[b.atomA].element === Element.N && mol.atoms[b.atomB].element === Element.N ||
-      mol.atoms[b.atomB].element === Element.N && mol.atoms[b.atomA].element === Element.N
+      mol.atoms[b.atomA].element === Element.N && mol.atoms[b.atomB].element === Element.N
     ),
     reactionClass: 'synthesis',
     reductionBonus: 0.2,

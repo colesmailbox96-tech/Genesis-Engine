@@ -3,6 +3,9 @@ import { Random } from '../utils/Random';
 import { Element, ELEMENT_PROPERTIES } from './Element';
 import { Molecule, Atom, Bond } from './Molecule';
 
+const REDOX_FAVORABLE_THRESHOLD = -1.0;
+const DOUBLE_BOND_ELECTRONEGATIVITY_THRESHOLD = 0.1;
+
 export interface MoleculePattern {
   minAtoms?: number;
   requiredElements?: Element[];
@@ -183,7 +186,7 @@ export class ReactionSystem {
       // Redox balance: exergonic reactions with very negative reactant redox get a probability boost
       if (rule.isExergonic) {
         const redoxSum = mol1.redoxPotential + mol2.redoxPotential;
-        if (redoxSum < -1.0) {
+        if (redoxSum < REDOX_FAVORABLE_THRESHOLD) {
           // Favorable thermodynamics: boost probability ×1.5 (applied in executeReaction)
           return { ...rule, probability: Math.min(1, rule.probability * 1.5) };
         }
@@ -255,7 +258,7 @@ export class ReactionSystem {
 
       // Choose bond order: double if electronegativity diff < 0.1 and both atoms have room
       const bondOrder: 'single' | 'double' =
-        (diff < 0.1 &&
+        (diff < DOUBLE_BOND_ELECTRONEGATIVITY_THRESHOLD &&
           atoms[a1].bondCount < maxBondsA - 1 &&
           atoms[a2 + offset].bondCount < maxBondsB - 1)
           ? 'double'

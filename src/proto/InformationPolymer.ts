@@ -1,5 +1,9 @@
 import { Random } from '../utils/Random';
 
+const MIN_FIDELITY_AFTER_CATASTROPHE = 0.5;
+const FIDELITY_DEGRADATION_STEP = 0.001;
+const TEMPERATURE_MUTATION_SCALING_FACTOR = 0.3;
+
 export class InformationPolymer {
   sequence: number[]; // 0-3 for 4 "bases"
   fidelity: number;
@@ -46,14 +50,14 @@ export class InformationPolymer {
     // Eigen threshold check: if error rate exceeds 1/L, collapse fidelity slightly
     const threshold = InformationPolymer.eigenThreshold(1 - this.fidelity, newSeq.length);
     const newFidelity = (1 - this.fidelity) > threshold
-      ? Math.max(0.5, this.fidelity - 0.001)  // error catastrophe: fidelity degrades
+      ? Math.max(MIN_FIDELITY_AFTER_CATASTROPHE, this.fidelity - FIDELITY_DEGRADATION_STEP)  // error catastrophe: fidelity degrades
       : this.fidelity;
     return new InformationPolymer(newSeq, newFidelity);
   }
 
   copyWithTemperature(rng: Random, temperature: number): InformationPolymer {
     // Higher temperature → more mutations
-    const tempFidelity = this.fidelity * (1 - temperature * 0.3);
+    const tempFidelity = this.fidelity * (1 - temperature * TEMPERATURE_MUTATION_SCALING_FACTOR);
     const tempPolymer = new InformationPolymer(this.sequence, tempFidelity);
     return tempPolymer.copy(rng);
   }
