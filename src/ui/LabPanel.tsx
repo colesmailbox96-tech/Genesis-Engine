@@ -127,7 +127,7 @@ export default function LabPanel({ onClose }: LabPanelProps) {
           onClick={applyAndRestart}
           className="flex-1 bg-cyan-700 hover:bg-cyan-600 text-white py-2 rounded transition-colors"
         >
-          ▶ Apply &amp; Restart
+          ▶ Apply & Restart
         </button>
         <button
           onClick={() => setConfig(DEFAULT_CONFIG)}
