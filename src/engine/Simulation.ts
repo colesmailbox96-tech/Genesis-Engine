@@ -105,6 +105,8 @@ export class Simulation {
 
   // State tracking
   private milestoneSet = new Set<string>();
+  private surfaceMap: Float32Array = new Float32Array(0);
+  private viscosityMap: Float32Array = new Float32Array(0);
 
   constructor(config: SimConfig = DEFAULT_CONFIG, seed?: number) {
     this.config = config;
@@ -134,6 +136,8 @@ export class Simulation {
     this.metricsCollector = new MetricsCollector(100);
 
     this.initializeWorld();
+    this.surfaceMap = this.generateSurfaceMap();
+    this.viscosityMap = this.generateViscosityMap();
   }
 
   private initializeWorld(): void {
@@ -187,6 +191,44 @@ export class Simulation {
     }
   }
 
+  private generateSurfaceMap(): Float32Array {
+    const gridSize = 64;
+    const map = new Float32Array(gridSize * gridSize);
+    for (let i = 0; i < gridSize * gridSize; i++) {
+      const gx = i % gridSize;
+      const gy = Math.floor(i / gridSize);
+      const worldX = (gx / gridSize) * this.config.worldSize;
+      const worldY = (gy / gridSize) * this.config.worldSize;
+      const zone = this.environmentMap.getZoneAt(worldX, worldY);
+      if (zone && (zone.type === 'tidal_zone' || zone.type === 'volcanic_shore')) {
+        map[i] = 0.7 + this.rng.next() * 0.3;
+      } else if (zone && zone.type === 'hydrothermal_vent') {
+        map[i] = 0.4 + this.rng.next() * 0.3;
+      } else {
+        map[i] = this.rng.next() * 0.2;
+      }
+    }
+    return map;
+  }
+
+  private generateViscosityMap(): Float32Array {
+    const gridSize = 64;
+    const map = new Float32Array(gridSize * gridSize);
+    for (let i = 0; i < gridSize * gridSize; i++) {
+      const gx = i % gridSize;
+      const gy = Math.floor(i / gridSize);
+      const worldX = (gx / gridSize) * this.config.worldSize;
+      const worldY = (gy / gridSize) * this.config.worldSize;
+      const zone = this.environmentMap.getZoneAt(worldX, worldY);
+      if (zone) {
+        map[i] = zone.diffusionRate;
+      } else {
+        map[i] = 0.1;
+      }
+    }
+    return map;
+  }
+
   update(): void {
     this.tick++;
 
@@ -217,7 +259,18 @@ export class Simulation {
     }
 
     // Chemical field diffusion
-    this.chemicalField.tick();
+    this.chemicalField.tickWithViscosity(this.viscosityMap);
+
+    // Surface adsorption every 10 ticks
+    if (this.tick % 10 === 0) {
+      this.chemicalField.applySurfaceAdsorption(this.surfaceMap);
+    }
+
+    // Flow field advection every 50 ticks
+    if (this.tick % 50 === 0) {
+      const flowField = this.environmentMap.buildFlowField();
+      this.chemicalField.advect(flowField);
+    }
 
     // Extinction events
     const extinctionType = this.extinctionSystem.checkForEvent(
@@ -322,6 +375,8 @@ export class Simulation {
             const mid = Math.floor(mol.atoms.length / 2);
             const mol1 = Molecule.createRandom(mol.atoms[0].element, mol.position.clone(), this.rng);
             const mol2 = Molecule.createRandom(mol.atoms[mid]?.element ?? Element.H, mol.position.add(new Vector2(this.rng.range(-1, 1), this.rng.range(-1, 1))), this.rng);
+            mol1.role = 'waste';
+            mol2.role = 'waste';
             newMolecules.push(mol1, mol2);
           }
         }
@@ -512,6 +567,36 @@ export class Simulation {
     if (this.protocells.length > 200) {
       this.protocells.sort((a, b) => b.age - a.age);
       this.protocells = this.protocells.slice(0, 150);
+    }
+
+    // Waste-as-food: waste molecules near protocells provide energy
+    if (this.tick % 5 === 0) {
+      for (const cell of this.protocells) {
+        const nearby = this.moleculeSpatialHash.query(cell.position.x, cell.position.y, 5);
+        for (const mol of nearby) {
+          if (mol.role === 'waste' && mol.energy > 0) {
+            cell.energy += mol.energy * 0.2;
+            mol.energy = 0;
+          }
+        }
+      }
+    }
+
+    // Predation/parasitism every 5 ticks
+    if (this.tick % 5 === 0) {
+      for (const cell of this.protocells) {
+        const nearbyProtocells = this.protocells.filter(
+          other => other.id !== cell.id && cell.position.distanceTo(other.position) < 15
+        );
+        for (const neighbor of nearbyProtocells) {
+          const gained = cell.tryHydrolyzeNeighbor(neighbor, this.rng);
+          if (gained > 0) cell.energy += gained;
+          const siphoned = cell.tryParasiteSiphon(neighbor, this.rng);
+          if (siphoned > 0) {
+            cell.energy += siphoned;
+          }
+        }
+      }
     }
   }
 

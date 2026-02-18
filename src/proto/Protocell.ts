@@ -2,6 +2,7 @@ import { Vector2 } from '../utils/Vector2';
 import { Random } from '../utils/Random';
 import { generateId } from '../utils/Math';
 import { Molecule } from '../chemistry/Molecule';
+import { Element } from '../chemistry/Element';
 import { Replicator } from './Replicator';
 import { ProtoMetabolism } from './Metabolism';
 import { SpatialEntity } from '../engine/SpatialHash';
@@ -181,5 +182,37 @@ export class Protocell implements SpatialEntity {
       return true;
     }
     return false;
+  }
+
+  tryHydrolyzeNeighbor(neighbor: Protocell, rng: Random): number {
+    const hydrolyzers = this.interior.filter(
+      mol => mol.atoms.some(a => a.element === Element.S) && mol.atoms.some(a => a.element === Element.O)
+    );
+    if (hydrolyzers.length === 0) return 0;
+    if (rng.next() >= 0.05 * hydrolyzers.length) return 0;
+
+    neighbor.membrane.stability -= 0.1 * hydrolyzers.length;
+
+    let energyGained = 0;
+    if (neighbor.membrane.stability < 0.2 && neighbor.interior.length > 0) {
+      const shuffled = [...neighbor.interior].sort(() => rng.next() - 0.5);
+      const stolen = shuffled.slice(0, Math.min(3, shuffled.length));
+      for (const mol of stolen) {
+        const idx = neighbor.interior.indexOf(mol);
+        if (idx !== -1) neighbor.interior.splice(idx, 1);
+        this.interior.push(mol);
+        energyGained += mol.energy;
+      }
+    }
+    return energyGained;
+  }
+
+  tryParasiteSiphon(neighbor: Protocell, rng: Random): number {
+    const h2Perm = this.membrane.permeability['H2'] ?? 0;
+    if (h2Perm <= 0.9) return 0;
+    if (rng.next() >= 0.03) return 0;
+    const stolen = neighbor.energy * 0.05;
+    neighbor.energy -= stolen;
+    return stolen;
   }
 }
