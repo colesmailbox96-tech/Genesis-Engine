@@ -105,6 +105,8 @@ export class Simulation {
 
   // State tracking
   private milestoneSet = new Set<string>();
+  private surfaceMap: Float32Array = new Float32Array(0);
+  private viscosityMap: Float32Array = new Float32Array(0);
 
   constructor(config: SimConfig = DEFAULT_CONFIG, seed?: number) {
     this.config = config;
@@ -134,6 +136,8 @@ export class Simulation {
     this.metricsCollector = new MetricsCollector(100);
 
     this.initializeWorld();
+    this.surfaceMap = this.generateSurfaceMap();
+    this.viscosityMap = this.generateViscosityMap();
   }
 
   private initializeWorld(): void {
@@ -187,11 +191,50 @@ export class Simulation {
     }
   }
 
+  private generateSurfaceMap(): Float32Array {
+    const gridSize = 64;
+    const map = new Float32Array(gridSize * gridSize);
+    for (let i = 0; i < gridSize * gridSize; i++) {
+      const gx = i % gridSize;
+      const gy = Math.floor(i / gridSize);
+      const worldX = (gx / gridSize) * this.config.worldSize;
+      const worldY = (gy / gridSize) * this.config.worldSize;
+      const zone = this.environmentMap.getZoneAt(worldX, worldY);
+      if (zone && (zone.type === 'tidal_zone' || zone.type === 'volcanic_shore')) {
+        map[i] = 0.7 + this.rng.next() * 0.3;
+      } else if (zone && zone.type === 'hydrothermal_vent') {
+        map[i] = 0.4 + this.rng.next() * 0.3;
+      } else {
+        map[i] = this.rng.next() * 0.2;
+      }
+    }
+    return map;
+  }
+
+  private generateViscosityMap(): Float32Array {
+    const gridSize = 64;
+    const map = new Float32Array(gridSize * gridSize);
+    for (let i = 0; i < gridSize * gridSize; i++) {
+      const gx = i % gridSize;
+      const gy = Math.floor(i / gridSize);
+      const worldX = (gx / gridSize) * this.config.worldSize;
+      const worldY = (gy / gridSize) * this.config.worldSize;
+      const zone = this.environmentMap.getZoneAt(worldX, worldY);
+      if (zone) {
+        map[i] = zone.diffusionRate;
+      } else {
+        map[i] = 0.1;
+      }
+    }
+    return map;
+  }
+
   update(): void {
     this.tick++;
 
     // Update environment cycles
     this.environmentMap.updateCycles(this.tick);
+    this.environmentMap.decayChemistry();
 
     // Chemistry
     this.updateChemistry();
@@ -216,7 +259,18 @@ export class Simulation {
     }
 
     // Chemical field diffusion
-    this.chemicalField.tick();
+    this.chemicalField.tickWithViscosity(this.viscosityMap);
+
+    // Surface adsorption every 10 ticks
+    if (this.tick % 10 === 0) {
+      this.chemicalField.applySurfaceAdsorption(this.surfaceMap);
+    }
+
+    // Flow field advection every 50 ticks
+    if (this.tick % 50 === 0) {
+      const flowField = this.environmentMap.buildFlowField();
+      this.chemicalField.advect(flowField);
+    }
 
     // Extinction events
     const extinctionType = this.extinctionSystem.checkForEvent(
@@ -279,6 +333,15 @@ export class Simulation {
       for (const other of nearby) {
         if (other.id === mol.id || toRemove.has(other.id) || toRemove.has(mol.id)) continue;
 
+        // Event-driven: skip low-activity pairs
+        if (mol.age > 1000 && other.age > 1000 && mol.energy < 1 && other.energy < 1) {
+          const combinedAge = mol.age + other.age;
+          const energyDeficit = 2 - (mol.energy + other.energy);
+          const rawSkipProb = 0.3 * (combinedAge / 2000) * Math.max(0, energyDeficit);
+          const skipProb = Math.min(0.9, rawSkipProb);
+          if (this.rng.next() < skipProb) continue;
+        }
+
         const rule = this.reactionSystem.checkReaction(mol, other, zone.temperature, undefined, zone.wetness);
         if (rule && this.rng.next() < rule.probability * zone.temperature) {
           const products = this.reactionSystem.executeReaction(mol, other, rule, this.rng);
@@ -316,6 +379,8 @@ export class Simulation {
             const mid = Math.floor(mol.atoms.length / 2);
             const mol1 = Molecule.createRandom(mol.atoms[0].element, mol.position.clone(), this.rng);
             const mol2 = Molecule.createRandom(mol.atoms[mid]?.element ?? Element.H, mol.position.add(new Vector2(this.rng.range(-1, 1), this.rng.range(-1, 1))), this.rng);
+            mol1.role = 'waste';
+            mol2.role = 'waste';
             newMolecules.push(mol1, mol2);
           }
         }
@@ -449,6 +514,11 @@ export class Simulation {
       const zone = this.environmentMap.getZoneAt(cell.position.x, cell.position.y);
       const daughter = cell.tick(this.rng, zone.temperature);
 
+      // Environmental pH/redox feedback from protocell metabolism
+      const pHDelta = cell.metabolism.metabolismRate > 0 ? -0.001 : 0;
+      const redoxDelta = cell.energy > 0 ? 0.001 : -0.001;
+      this.environmentMap.modifyLocalChemistry(cell.position.x, cell.position.y, pHDelta, redoxDelta);
+
       if (daughter) {
         newProtocells.push(daughter);
         this.protoSelection.recordDivision(cell.id);
@@ -481,10 +551,56 @@ export class Simulation {
     // Add new protocells
     this.protocells.push(...newProtocells);
 
+    // Cross-feeding: protocells leak metabolites that nearby cells can absorb
+    if (this.tick % 10 === 0) {
+      for (const cell of this.protocells) {
+        const leaked = cell.leakMetabolites(this.rng);
+        if (leaked.length === 0) continue;
+        for (const other of this.protocells) {
+          if (other.id === cell.id) continue;
+          if (cell.position.distanceTo(other.position) < 20) {
+            for (const metabolite of leaked) {
+              other.energy += metabolite.energy * 0.3; // cross-feed benefit
+            }
+          }
+        }
+      }
+    }
+
     // Cap protocells
     if (this.protocells.length > 200) {
       this.protocells.sort((a, b) => b.age - a.age);
       this.protocells = this.protocells.slice(0, 150);
+    }
+
+    // Waste-as-food: waste molecules near protocells provide energy
+    if (this.tick % 5 === 0) {
+      for (const cell of this.protocells) {
+        const nearby = this.moleculeSpatialHash.query(cell.position.x, cell.position.y, 5);
+        for (const mol of nearby) {
+          if (mol.role === 'waste' && mol.energy > 0) {
+            cell.energy += mol.energy * 0.2;
+            mol.energy = 0;
+          }
+        }
+      }
+    }
+
+    // Predation/parasitism every 5 ticks
+    if (this.tick % 5 === 0) {
+      for (const cell of this.protocells) {
+        const nearbyProtocells = this.protocells.filter(
+          other => other.id !== cell.id && cell.position.distanceTo(other.position) < 15
+        );
+        for (const neighbor of nearbyProtocells) {
+          const gained = cell.tryHydrolyzeNeighbor(neighbor, this.rng);
+          if (gained > 0) cell.energy += gained;
+          const siphoned = cell.tryParasiteSiphon(neighbor, this.rng);
+          if (siphoned > 0) {
+            cell.energy += siphoned;
+          }
+        }
+      }
     }
   }
 
@@ -805,6 +921,42 @@ export class Simulation {
           }
         }
       }
+
+      // COMPARTMENT: first stable vesicle with trapped contents
+      if (!this.milestoneSet.has('COMPARTMENT')) {
+        const stableCell = this.protocells.find(c => c.interior.length >= 3 && c.integrity >= 0.7);
+        if (stableCell) {
+          this.addMilestone('COMPARTMENT', `First stable compartment (${stableCell.interior.length} trapped molecules, integrity ${stableCell.integrity.toFixed(2)})`);
+        }
+      }
+
+      // TEMPLATE_REPLICATION: genome copying observed
+      if (!this.milestoneSet.has('TEMPLATE_REPLICATION')) {
+        const cell = this.protocells.find(c => c.replicators.length > 0 && c.replicators[0].copyCount >= 2);
+        if (cell) {
+          this.addMilestone('TEMPLATE_REPLICATION', `Template replication observed (${cell.replicators[0].copyCount} copies, length ${cell.replicators[0].polymer.length})`);
+        }
+      }
+
+      // PROTON_GRADIENT: compartment with pH differential from environment
+      if (!this.milestoneSet.has('PROTON_GRADIENT')) {
+        for (const cell of this.protocells) {
+          const localPH = this.environmentMap.getLocalPH(cell.position.x, cell.position.y);
+          const internalPH = 7.0 + (cell.energy - 1) * 0.5;
+          if (Math.abs(internalPH - localPH) > 1.0) {
+            this.addMilestone('PROTON_GRADIENT', `Proton gradient detected (ΔpH: ${Math.abs(internalPH - localPH).toFixed(2)})`);
+            break;
+          }
+        }
+      }
+
+      // CATALYTIC_CYCLE: closed-loop metabolic network (3+ pathways)
+      if (!this.milestoneSet.has('CATALYTIC_CYCLE')) {
+        const cell = this.protocells.find(c => c.metabolism.pathways.length >= 3 && c.metabolism.totalEnergyProduced > 0);
+        if (cell) {
+          this.addMilestone('CATALYTIC_CYCLE', `Catalytic cycle: ${cell.metabolism.pathways.length} metabolic pathways active`);
+        }
+      }
     }
 
     // Stage 3 milestones (organism-based) — only check every 100 ticks
@@ -851,6 +1003,44 @@ export class Simulation {
 
       if (!this.milestoneSet.has('ECOSYSTEM') && this.speciationSystem.getSpeciesCount() >= 5) {
         this.addMilestone('ECOSYSTEM', `${this.speciationSystem.getSpeciesCount()} species coexisting`);
+      }
+
+      // PROOFREADING: mutation rate drops (fidelity improvement observed)
+      if (!this.milestoneSet.has('PROOFREADING')) {
+        for (const cell of this.protocells) {
+          if (cell.replicators.length > 0 && cell.replicators[0].polymer.fidelity > 0.95) {
+            this.addMilestone('PROOFREADING', `High-fidelity replication evolved (fidelity: ${cell.replicators[0].polymer.fidelity.toFixed(3)})`);
+            break;
+          }
+        }
+      }
+
+      // PHOTOSYNTHESIS_LIKE: UV harvesting milestone
+      if (!this.milestoneSet.has('PHOTOSYNTHESIS_LIKE') && !this.milestoneSet.has('PHOTOSYNTHESIS')) {
+        const uvSource = this.energySources.find(s => s.type === 'uv_radiation');
+        if (uvSource) {
+          const nearUV = this.protocells.find(c => c.position.distanceTo(uvSource.position) < uvSource.radius * 0.5 && c.energy > 2);
+          if (nearUV) {
+            this.addMilestone('PHOTOSYNTHESIS_LIKE', `UV energy harvesting (protocell thriving in UV zone with energy ${nearUV.energy.toFixed(1)})`);
+          }
+        }
+      }
+
+      // MULTICELLULAR_ISH: multiple organisms moving as cluster (adhesion)
+      if (!this.milestoneSet.has('MULTICELLULAR_ISH')) {
+        const organisms = this.organismManager.organisms;
+        if (organisms.length >= 3) {
+          const clusters = new Set<string>();
+          for (const org of organisms) {
+            const nearby = this.organismManager.getNearby(org.position.x, org.position.y, 5);
+            const nearbyOthers = nearby.filter(o => o !== org);
+            // Require at least two *other* organisms nearby → cluster of at least three including this one
+            if (nearbyOthers.length >= 2) { clusters.add(org.species.toString()); }
+          }
+          if (clusters.size > 0) {
+            this.addMilestone('MULTICELLULAR_ISH', `Proto-multicellular cluster detected (${clusters.size} species participating)`);
+          }
+        }
       }
     }
   }

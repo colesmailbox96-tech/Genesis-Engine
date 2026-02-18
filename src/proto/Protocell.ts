@@ -2,6 +2,7 @@ import { Vector2 } from '../utils/Vector2';
 import { Random } from '../utils/Random';
 import { generateId } from '../utils/Math';
 import { Molecule } from '../chemistry/Molecule';
+import { Element } from '../chemistry/Element';
 import { Replicator } from './Replicator';
 import { ProtoMetabolism } from './Metabolism';
 import { SpatialEntity } from '../engine/SpatialHash';
@@ -90,7 +91,7 @@ export class Protocell implements SpatialEntity {
 
     // Replicator activity
     for (const rep of this.replicators) {
-      const child = rep.tick(this.energy, rng);
+      const child = rep.tick(this.energy, rng, temperature);
       if (child) {
         this.energy -= rep.energyCost;
         this.replicators.push(child);
@@ -150,6 +151,23 @@ export class Protocell implements SpatialEntity {
     return daughter;
   }
 
+  leakMetabolites(rng: Random): { formula: string; energy: number }[] {
+    const leaked: { formula: string; energy: number }[] = [];
+    const leakProb = 0.02 * (1 - this.membrane.stability);
+    const toRemove = new Set<number>();
+    for (let i = 0; i < this.interior.length && leaked.length < 5; i++) {
+      const mol = this.interior[i];
+      if (mol.atoms.length <= 3 && rng.next() < leakProb) {
+        leaked.push({ formula: mol.getFormula(), energy: mol.energy });
+        toRemove.add(i);
+      }
+    }
+    if (toRemove.size > 0) {
+      this.interior = this.interior.filter((_, i) => !toRemove.has(i));
+    }
+    return leaked;
+  }
+
   absorbMolecule(mol: Molecule): boolean {
     const formula = mol.getFormula();
     const formulaPerm = this.membrane.permeability[formula] ?? 0.1;
@@ -164,5 +182,42 @@ export class Protocell implements SpatialEntity {
       return true;
     }
     return false;
+  }
+
+  tryHydrolyzeNeighbor(neighbor: Protocell, rng: Random): number {
+    const hydrolyzers = this.interior.filter(
+      mol => mol.atoms.some(a => a.element === Element.S) && mol.atoms.some(a => a.element === Element.O)
+    );
+    if (hydrolyzers.length === 0) return 0;
+    if (rng.next() >= 0.05 * hydrolyzers.length) return 0;
+
+    neighbor.membrane.stability -= 0.1 * hydrolyzers.length;
+
+    let energyGained = 0;
+    if (neighbor.membrane.stability < 0.2 && neighbor.interior.length > 0) {
+      // Randomly select up to 3 molecules without replacement, without copying/shuffling the whole array
+      const toSteal = Math.min(3, neighbor.interior.length);
+      const selectedIndices = new Set<number>();
+      while (selectedIndices.size < toSteal) {
+        selectedIndices.add(rng.int(0, neighbor.interior.length));
+      }
+      const stolen = Array.from(selectedIndices, idx => neighbor.interior[idx]);
+      for (const mol of stolen) {
+        const idx = neighbor.interior.indexOf(mol);
+        if (idx !== -1) neighbor.interior.splice(idx, 1);
+        this.interior.push(mol);
+        energyGained += mol.energy;
+      }
+    }
+    return energyGained;
+  }
+
+  tryParasiteSiphon(neighbor: Protocell, rng: Random): number {
+    const h2Perm = this.membrane.permeability['H2'] ?? 0;
+    if (h2Perm <= 0.9) return 0;
+    if (rng.next() >= 0.03) return 0;
+    const stolen = neighbor.energy * 0.05;
+    neighbor.energy -= stolen;
+    return stolen;
   }
 }

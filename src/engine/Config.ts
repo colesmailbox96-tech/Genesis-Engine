@@ -125,3 +125,62 @@ export const DEFAULT_CONFIG: SimConfig = {
   cullingMargin: 2,
   lodThresholds: [0.5, 1.0, 3.0, 6.0],
 };
+
+export const PRESET_PRIMORDIAL_SOUP: Partial<SimConfig> = {
+  ventCount: 3,
+  ventPower: 8,
+  uvIntensityMax: 3,
+  diffusionRate: 0.15,
+  wetDryCyclePeriod: 2000,
+  lightningProbability: 0.003,
+};
+
+export const PRESET_HYDROTHERMAL_VENT: Partial<SimConfig> = {
+  ventCount: 10,
+  ventPower: 20,
+  uvIntensityMax: 0,
+  diffusionRate: 0.2,
+  redoxGradientStrength: 0.9,
+  basalMetabolicRate: 0.015,
+};
+
+export const PRESET_ICE_WORLD: Partial<SimConfig> = {
+  ventCount: 1,
+  ventPower: 3,
+  uvIntensityMax: 1,
+  diffusionRate: 0.02,
+  wetDryCyclePeriod: 50000,
+  moleculeDecayRate: 0.00001,
+};
+
+export const PRESET_TIDAL_FLATS: Partial<SimConfig> = {
+  ventCount: 2,
+  ventPower: 5,
+  uvIntensityMax: 6,
+  diffusionRate: 0.12,
+  wetDryCyclePeriod: 1000,
+  autocatalysisBoost: 3.0,
+};
+
+export const PRESET_STORM_PLANET: Partial<SimConfig> = {
+  ventCount: 4,
+  ventPower: 12,
+  uvIntensityMax: 8,
+  lightningProbability: 0.02,
+  lightningEnergy: 200,
+  electricalStormProbability: 0.005,
+  asteroidImpactRate: 0.000001,
+};
+
+export type PresetName = 'primordial_soup' | 'hydrothermal_vent' | 'ice_world' | 'tidal_flats' | 'storm_planet';
+
+export function applyPreset(base: SimConfig, preset: PresetName): SimConfig {
+  const presets: Record<PresetName, Partial<SimConfig>> = {
+    primordial_soup: PRESET_PRIMORDIAL_SOUP,
+    hydrothermal_vent: PRESET_HYDROTHERMAL_VENT,
+    ice_world: PRESET_ICE_WORLD,
+    tidal_flats: PRESET_TIDAL_FLATS,
+    storm_planet: PRESET_STORM_PLANET,
+  };
+  return { ...base, ...presets[preset] };
+}

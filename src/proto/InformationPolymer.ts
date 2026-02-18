@@ -1,5 +1,9 @@
 import { Random } from '../utils/Random';
 
+const MIN_FIDELITY_AFTER_CATASTROPHE = 0.5;
+const FIDELITY_DEGRADATION_STEP = 0.001;
+const TEMPERATURE_MUTATION_SCALING_FACTOR = 0.3;
+
 export class InformationPolymer {
   sequence: number[]; // 0-3 for 4 "bases"
   fidelity: number;
@@ -43,7 +47,33 @@ export class InformationPolymer {
       newSeq.splice(insertAt, 0, ...segment);
     }
 
-    return new InformationPolymer(newSeq, this.fidelity);
+    // Eigen threshold check: if error rate exceeds 1/L, collapse fidelity slightly
+    const maxTolerableErrorRate = InformationPolymer.eigenThreshold(1 - this.fidelity, newSeq.length);
+    const newFidelity = (1 - this.fidelity) > maxTolerableErrorRate
+      ? Math.max(MIN_FIDELITY_AFTER_CATASTROPHE, this.fidelity - FIDELITY_DEGRADATION_STEP)  // error catastrophe: fidelity degrades
+      : this.fidelity;
+    return new InformationPolymer(newSeq, newFidelity);
+  }
+
+  copyWithTemperature(rng: Random, temperature: number): InformationPolymer {
+    // Higher temperature → more mutations
+    // Ensure temperature is treated as a normalized value in [0, 1]
+    const normalizedTemperature = Math.min(1, Math.max(0, temperature));
+    let tempFidelity = this.fidelity * (1 - normalizedTemperature * TEMPERATURE_MUTATION_SCALING_FACTOR);
+    // Clamp fidelity to the valid probability range [0, 1]
+    tempFidelity = Math.min(1, Math.max(0, tempFidelity));
+    const tempPolymer = new InformationPolymer(this.sequence, tempFidelity);
+    return tempPolymer.copy(rng);
+  }
+
+  static eigenThreshold(_mutationRate: number, genomeLength: number): number {
+    // Eigen's error threshold: error_rate < 1/genome_length for stable replication
+    return 1.0 / Math.max(1, genomeLength);
+  }
+
+  isAboveErrorThreshold(): boolean {
+    const mutRate = 1 - this.fidelity;
+    return mutRate > InformationPolymer.eigenThreshold(mutRate, this.length);
   }
 
   similarity(other: InformationPolymer): number {

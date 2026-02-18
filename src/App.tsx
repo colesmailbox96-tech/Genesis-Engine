@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useGameStore } from './store';
 import GameCanvas from './ui/GameCanvas';
 import WelcomeScreen from './ui/WelcomeScreen';
@@ -9,9 +9,11 @@ import MilestoneLog from './ui/MilestoneLog';
 import MiniMap from './ui/MiniMap';
 import StatsDashboard from './ui/StatsDashboard';
 import ResearchPanel from './ui/ResearchPanel';
+import LabPanel from './ui/LabPanel';
 
 export default function App() {
   const { simulation, showStats, setShowStats, showResearch, setShowResearch } = useGameStore();
+  const [showLab, setShowLab] = useState(false);
 
   // F10 for stats dashboard
   useEffect(() => {
@@ -49,9 +51,10 @@ export default function App() {
           <MiniMap />
           <InspectorPanel />
           <MilestoneLog />
-          <TimeControls />
+          <TimeControls onOpenLab={() => setShowLab(true)} />
           <StatsDashboard />
           <ResearchPanel />
+          {showLab && <LabPanel onClose={() => setShowLab(false)} />}
         </>
       )}
     </div>

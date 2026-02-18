@@ -20,14 +20,14 @@ export class Replicator {
     return this.polymer.length * 0.01;
   }
 
-  tick(availableEnergy: number, rng: Random): Replicator | null {
+  tick(availableEnergy: number, rng: Random, temperature: number = 0.5): Replicator | null {
     if (availableEnergy < this.energyCost) return null;
 
     this.replicationProgress++;
     if (this.replicationProgress >= this.replicationSpeed) {
       this.replicationProgress = 0;
       this.copyCount++;
-      const newPolymer = this.polymer.copy(rng);
+      const newPolymer = this.polymer.copyWithTemperature(rng, temperature);
       const speed = this.replicationSpeed + rng.gaussian(0, 5);
       return new Replicator(newPolymer, Math.max(10, speed));
     }

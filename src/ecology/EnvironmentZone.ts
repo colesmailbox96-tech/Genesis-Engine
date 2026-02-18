@@ -31,6 +31,8 @@ export class EnvironmentMap {
   private zoneData: EnvironmentZone[][] = [];
   private baseTemperatures: Float32Array;
   private baseUvIntensities: Float32Array;
+  phField: Float32Array;
+  redoxField: Float32Array;
 
   constructor(worldSize: number, gridSize: number = 64, seed: number = 42) {
     this.worldSize = worldSize;
@@ -39,6 +41,8 @@ export class EnvironmentMap {
     this.zones = new Float32Array(gridSize * gridSize);
     this.baseTemperatures = new Float32Array(gridSize * gridSize);
     this.baseUvIntensities = new Float32Array(gridSize * gridSize);
+    this.phField = new Float32Array(gridSize * gridSize).fill(7.0);
+    this.redoxField = new Float32Array(gridSize * gridSize);
     this.generateZones();
   }
 
@@ -176,4 +180,39 @@ export class EnvironmentMap {
 
   getGrid(): EnvironmentZone[][] { return this.zoneData; }
   getGridSize(): number { return this.gridSize; }
+
+  buildFlowField(): (gx: number, gy: number) => Vector2 {
+    return (gx: number, gy: number) => {
+      const zone = this.getZoneAt(gx * (this.worldSize / this.gridSize), gy * (this.worldSize / this.gridSize));
+      if (!zone) return Vector2.zero();
+      return zone.flowDirection.mul(zone.flowSpeed);
+    };
+  }
+
+  modifyLocalChemistry(worldX: number, worldY: number, pHDelta: number, redoxDelta: number): void {
+    const gx = Math.max(0, Math.min(this.gridSize - 1, Math.floor((worldX / this.worldSize) * this.gridSize)));
+    const gy = Math.max(0, Math.min(this.gridSize - 1, Math.floor((worldY / this.worldSize) * this.gridSize)));
+    const i = gy * this.gridSize + gx;
+    this.phField[i] = Math.max(0, Math.min(14, this.phField[i] + pHDelta));
+    this.redoxField[i] = Math.max(-1, Math.min(1, this.redoxField[i] + redoxDelta));
+  }
+
+  getLocalPH(worldX: number, worldY: number): number {
+    const gx = Math.max(0, Math.min(this.gridSize - 1, Math.floor((worldX / this.worldSize) * this.gridSize)));
+    const gy = Math.max(0, Math.min(this.gridSize - 1, Math.floor((worldY / this.worldSize) * this.gridSize)));
+    return this.phField[gy * this.gridSize + gx];
+  }
+
+  getLocalRedox(worldX: number, worldY: number): number {
+    const gx = Math.max(0, Math.min(this.gridSize - 1, Math.floor((worldX / this.worldSize) * this.gridSize)));
+    const gy = Math.max(0, Math.min(this.gridSize - 1, Math.floor((worldY / this.worldSize) * this.gridSize)));
+    return this.redoxField[gy * this.gridSize + gx];
+  }
+
+  decayChemistry(rate: number = 0.001): void {
+    for (let i = 0; i < this.phField.length; i++) {
+      this.phField[i] += (7.0 - this.phField[i]) * rate;
+      this.redoxField[i] += (0.0 - this.redoxField[i]) * rate;
+    }
+  }
 }
