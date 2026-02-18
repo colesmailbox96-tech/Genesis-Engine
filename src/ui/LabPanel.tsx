@@ -13,9 +13,28 @@ interface SliderProps {
 }
 
 function getDecimalPlaces(step: number): number {
-  if (step < 0.01) return 4;
-  if (step < 1) return 2;
-  return 0;
+  // Guard against non-positive steps
+  if (step <= 0) return 0;
+
+  let dynamicPlaces = 0;
+  if (step < 1) {
+    // Number of decimal digits implied by the step's magnitude
+    dynamicPlaces = Math.ceil(-Math.log10(step));
+  }
+
+  let places: number;
+  if (step < 0.01) {
+    // Preserve at least 4 decimals for very small steps, but allow more if needed
+    places = Math.max(4, dynamicPlaces);
+  } else if (step < 1) {
+    // Preserve at least 2 decimals for fractional steps
+    places = Math.max(2, dynamicPlaces);
+  } else {
+    places = 0;
+  }
+
+  // Avoid excessively long numbers in the UI
+  return Math.min(8, places);
 }
 
 function Slider({ label, value, min, max, step, unit = '', onChange }: SliderProps) {
