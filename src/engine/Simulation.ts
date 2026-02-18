@@ -553,15 +553,17 @@ export class Simulation {
 
     // Cross-feeding: protocells leak metabolites that nearby cells can absorb
     if (this.tick % 10 === 0) {
+      const crossFeedRadiusSq = 20 * 20;
       for (const cell of this.protocells) {
         const leaked = cell.leakMetabolites(this.rng);
         if (leaked.length === 0) continue;
+        let leakedEnergy = 0;
+        for (const metabolite of leaked) leakedEnergy += metabolite.energy;
+        const benefit = leakedEnergy * 0.3;
         for (const other of this.protocells) {
           if (other.id === cell.id) continue;
-          if (cell.position.distanceTo(other.position) < 20) {
-            for (const metabolite of leaked) {
-              other.energy += metabolite.energy * 0.3; // cross-feed benefit
-            }
+          if (cell.position.distanceSqTo(other.position) < crossFeedRadiusSq) {
+            other.energy += benefit;
           }
         }
       }
@@ -588,11 +590,11 @@ export class Simulation {
 
     // Predation/parasitism every 5 ticks
     if (this.tick % 5 === 0) {
+      const predationRadiusSq = 15 * 15;
       for (const cell of this.protocells) {
-        const nearbyProtocells = this.protocells.filter(
-          other => other.id !== cell.id && cell.position.distanceTo(other.position) < 15
-        );
-        for (const neighbor of nearbyProtocells) {
+        for (const neighbor of this.protocells) {
+          if (neighbor.id === cell.id) continue;
+          if (cell.position.distanceSqTo(neighbor.position) >= predationRadiusSq) continue;
           const gained = cell.tryHydrolyzeNeighbor(neighbor, this.rng);
           if (gained > 0) cell.energy += gained;
           const siphoned = cell.tryParasiteSiphon(neighbor, this.rng);
@@ -728,16 +730,20 @@ export class Simulation {
           if (other.id === org.id || !other.alive) continue;
           const threshold = org.phenotype.bodyRadius + other.phenotype.bodyRadius + 1;
           if (org.position.distanceSqTo(other.position) < threshold * threshold) {
-            org.genome.horizontalTransfer(other.genome, this.rng);
+            const newGenome = org.genome.horizontalTransfer(other.genome, this.rng);
+            org.genome = newGenome;
+            org.phenotype = newGenome.express();
             break;
           }
         }
       }
 
       // Carrying capacity pressure — organisms in over-crowded niches lose energy faster
+      // Quadratic scaling: pressure ramps up sharply as niche exceeds capacity
       const nichePressure = this.ecosystem.getNichePressure(org);
       if (nichePressure > 1) {
-        org.energy -= (nichePressure - 1) * 0.005;
+        const excess = nichePressure - 1;
+        org.energy -= excess * excess * 0.02;
       }
 
       // Predation check
@@ -746,14 +752,32 @@ export class Simulation {
           if (other.id === org.id || !other.alive) continue;
           const threshold = org.phenotype.bodyRadius + other.phenotype.bodyRadius;
           if (org.position.distanceSqTo(other.position) < threshold * threshold) {
-            if (org.phenotype.metabolismType === 'heterotrophy' || org.phenotype.mass > other.phenotype.mass * 1.5) {
-              const energyGain = other.energy * 0.7;
-              org.energy += energyGain;
-              other.takeDamage(1);
+            // Combat viability: heterotrophs get a bonus, but mass ratio and defense still matter
+            const massRatio = org.phenotype.mass / Math.max(0.01, other.phenotype.mass);
+            const offenseBonus = org.phenotype.metabolismType === 'heterotrophy' ? 0.5 : 0;
+            const defenseReduction = other.phenotype.shellThickness * 0.3 + other.phenotype.toxicity * 0.3;
+            const combatScore = massRatio + offenseBonus - defenseReduction;
+
+            if (combatScore > 0.8) {
+              // Trophic efficiency: predator only assimilates a fraction of prey energy
+              const trophicEfficiency = 0.3;
+              const extractedEnergy = other.energy * 0.5;
+              other.energy -= extractedEnergy;
+              org.energy += extractedEnergy * trophicEfficiency;
+              // Remainder lost as heat/waste to ecosystem
+              this.resourceCycle.addDeadOrganism(extractedEnergy * (1 - trophicEfficiency));
+
+              // Toxicity retaliation: toxic prey damages the predator
+              if (other.phenotype.toxicity > 0.1) {
+                org.takeDamage(other.phenotype.toxicity * 0.3);
+              }
+
+              other.takeDamage(combatScore * 0.5);
               if (!other.alive) {
                 org.killCount++;
                 this.foodWeb.recordPredation(org, other);
-                this.resourceCycle.addDeadOrganism(other.energy * 0.3);
+                this.resourceCycle.addDeadOrganism(other.energy);
+                other.energy = 0;
               }
             }
           }

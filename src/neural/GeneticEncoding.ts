@@ -17,6 +17,9 @@ export function encodeGenomeToGenes(neatGenome: NEATGenome): number[] {
 
 export function computeNeuralCost(genome: NEATGenome): number {
   const nodeCount = genome.nodeGenes.length;
-  const connCount = genome.connectionGenes.filter(c => c.enabled).length;
-  return (nodeCount * 0.001 + connCount * 0.0005);
+  let enabledConnCount = 0;
+  for (const c of genome.connectionGenes) {
+    if (c.enabled) enabledConnCount++;
+  }
+  return (nodeCount * 0.001 + enabledConnCount * 0.0005);
 }

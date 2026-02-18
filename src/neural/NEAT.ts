@@ -83,14 +83,26 @@ export function neatForward(genome: NEATGenome, inputs: number[]): number[] {
   const hiddenNodes = genome.nodeGenes.filter(n => n.type === 'hidden');
   const processOrder = [...hiddenNodes, ...outputNodes];
 
+  // Pre-build incoming connection map: nodeId → list of enabled connections targeting it
+  const incomingConnections = new Map<number, ConnectionGene[]>();
+  for (const conn of genome.connectionGenes) {
+    if (!conn.enabled) continue;
+    let list = incomingConnections.get(conn.outNode);
+    if (!list) {
+      list = [];
+      incomingConnections.set(conn.outNode, list);
+    }
+    list.push(conn);
+  }
+
   // Two passes to propagate through hidden layers
   for (let pass = 0; pass < 2; pass++) {
     for (const node of processOrder) {
       let sum = node.bias;
-      for (const conn of genome.connectionGenes) {
-        if (conn.enabled && conn.outNode === node.id) {
-          const inVal = nodeValues.get(conn.inNode) ?? 0;
-          sum += inVal * conn.weight;
+      const incoming = incomingConnections.get(node.id);
+      if (incoming) {
+        for (const conn of incoming) {
+          sum += (nodeValues.get(conn.inNode) ?? 0) * conn.weight;
         }
       }
       const activationFn = getActivation(node.activation);

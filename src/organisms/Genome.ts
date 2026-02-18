@@ -193,8 +193,9 @@ export class Genome {
       });
     }
 
-    // Gene deletion
-    if (rng.next() < this.mutationRate * 0.3 && newGenes.length > 5) {
+    // Gene deletion — rate increases with genome length to counter bloat
+    const deletionRate = this.mutationRate * 0.3 + Math.max(0, (newGenes.length - 15) * 0.005);
+    if (rng.next() < deletionRate && newGenes.length > 5) {
       newGenes.splice(rng.int(0, newGenes.length), 1);
     }
 
