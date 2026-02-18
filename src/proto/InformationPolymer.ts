@@ -57,7 +57,11 @@ export class InformationPolymer {
 
   copyWithTemperature(rng: Random, temperature: number): InformationPolymer {
     // Higher temperature → more mutations
-    const tempFidelity = this.fidelity * (1 - temperature * TEMPERATURE_MUTATION_SCALING_FACTOR);
+    // Ensure temperature is treated as a normalized value in [0, 1]
+    const normalizedTemperature = Math.min(1, Math.max(0, temperature));
+    let tempFidelity = this.fidelity * (1 - normalizedTemperature * TEMPERATURE_MUTATION_SCALING_FACTOR);
+    // Clamp fidelity to the valid probability range [0, 1]
+    tempFidelity = Math.min(1, Math.max(0, tempFidelity));
     const tempPolymer = new InformationPolymer(this.sequence, tempFidelity);
     return tempPolymer.copy(rng);
   }
