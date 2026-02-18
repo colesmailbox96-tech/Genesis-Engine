@@ -116,7 +116,7 @@ export class ChemicalField {
         for (let gx = 0; gx < this.gridSize; gx++) {
           const i = this.idx(gx, gy);
           const visc = Math.max(0, Math.min(1, viscosityMap[i]));
-          const rate = 0.1 * visc;
+          const rate = 0.1 * (1 - visc);
           let sum = 0;
           let count = 0;
           if (gx > 0) { sum += grid[this.idx(gx - 1, gy)]; count++; }
